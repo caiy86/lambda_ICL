@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from typing import List, Dict, Tuple, Optional
 import logging
 
-from models.policy_network import PolicyNetwork, RnnHiddenState
+from models.policy_network import PolicyNetwork
 from models.embedding_model import EmbeddingModel
 
 from utils import device 

@@ -1,0 +1,120 @@
+2025-11-08 01:06:57 - root - INFO - Logging setup complete. Outputting to console and file: logs/rl_icl_qwen_1108_0106.log
+2025-11-08 01:06:57 - root - INFO - Initialized all random seeds to: 42
+2025-11-08 01:06:57 - __main__ - INFO - Using device: cuda
+2025-11-08 01:06:57 - __main__ - INFO - --- Loading Models & Data for Pre-training ---
+2025-11-08 01:06:57 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-08 01:06:57 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-08 01:07:06 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-08 01:07:06 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-11-08 01:07:10 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-11-08 01:07:10 - models.policy_network - INFO - Initializing PolicyNetwork (Type: LSTM)
+2025-11-08 01:07:10 - data_utils.mtop_loader - INFO - Loading MTOP corpus (from 'train' split)...
+2025-11-08 01:07:16 - data_utils.mtop_loader - INFO - Loaded 15667 examples into corpus.
+2025-11-08 01:07:18 - data_utils.mtop_loader - INFO - Loading MTOP query dataloader (split=train, batch_size=16, shuffle=False)...
+2025-11-08 01:07:23 - __main__ - INFO - --- Generating MMR Expert Trajectories ---
+2025-11-08 01:07:30 - __main__ - INFO - Generated 15667 MMR trajectories.
+2025-11-08 01:07:30 - engine.reward_computer - INFO - RewardComputer initialized with GAE (gamma=0.99, lambda=0.95)
+2025-11-08 01:07:30 - __main__ - INFO - --- Computing Expert Returns for MMR Trajectories ---
+2025-11-08 01:09:18 - __main__ - INFO - --- Starting Supervised Pre-training for 100 Epochs ---
+2025-11-08 01:09:20 - __main__ - INFO - Pre-train Epoch 1 finished. Avg Actor Loss: 9.2179, Avg Critic Loss: 1.6639
+2025-11-08 01:09:23 - __main__ - INFO - Pre-train Epoch 2 finished. Avg Actor Loss: 8.7179, Avg Critic Loss: 0.7672
+2025-11-08 01:09:25 - __main__ - INFO - Pre-train Epoch 3 finished. Avg Actor Loss: 8.4204, Avg Critic Loss: 0.7290
+2025-11-08 01:09:27 - __main__ - INFO - Pre-train Epoch 4 finished. Avg Actor Loss: 8.1443, Avg Critic Loss: 0.7086
+2025-11-08 01:09:29 - __main__ - INFO - Pre-train Epoch 5 finished. Avg Actor Loss: 7.9045, Avg Critic Loss: 0.6983
+2025-11-08 01:09:31 - __main__ - INFO - Pre-train Epoch 6 finished. Avg Actor Loss: 7.6924, Avg Critic Loss: 0.6897
+2025-11-08 01:09:33 - __main__ - INFO - Pre-train Epoch 7 finished. Avg Actor Loss: 7.5068, Avg Critic Loss: 0.6838
+2025-11-08 01:09:35 - __main__ - INFO - Pre-train Epoch 8 finished. Avg Actor Loss: 7.3435, Avg Critic Loss: 0.6792
+2025-11-08 01:09:38 - __main__ - INFO - Pre-train Epoch 9 finished. Avg Actor Loss: 7.2009, Avg Critic Loss: 0.6732
+2025-11-08 01:09:40 - __main__ - INFO - Pre-train Epoch 10 finished. Avg Actor Loss: 7.0719, Avg Critic Loss: 0.6676
+2025-11-08 01:09:42 - __main__ - INFO - Pre-train Epoch 11 finished. Avg Actor Loss: 6.9543, Avg Critic Loss: 0.6664
+2025-11-08 01:09:44 - __main__ - INFO - Pre-train Epoch 12 finished. Avg Actor Loss: 6.8444, Avg Critic Loss: 0.6595
+2025-11-08 01:09:46 - __main__ - INFO - Pre-train Epoch 13 finished. Avg Actor Loss: 6.7415, Avg Critic Loss: 0.6589
+2025-11-08 01:09:48 - __main__ - INFO - Pre-train Epoch 14 finished. Avg Actor Loss: 6.6426, Avg Critic Loss: 0.6534
+2025-11-08 01:09:50 - __main__ - INFO - Pre-train Epoch 15 finished. Avg Actor Loss: 6.5522, Avg Critic Loss: 0.6531
+2025-11-08 01:09:53 - __main__ - INFO - Pre-train Epoch 16 finished. Avg Actor Loss: 6.4619, Avg Critic Loss: 0.6462
+2025-11-08 01:09:55 - __main__ - INFO - Pre-train Epoch 17 finished. Avg Actor Loss: 6.3791, Avg Critic Loss: 0.6450
+2025-11-08 01:09:57 - __main__ - INFO - Pre-train Epoch 18 finished. Avg Actor Loss: 6.3031, Avg Critic Loss: 0.6395
+2025-11-08 01:09:59 - __main__ - INFO - Pre-train Epoch 19 finished. Avg Actor Loss: 6.2337, Avg Critic Loss: 0.6389
+2025-11-08 01:10:01 - __main__ - INFO - Pre-train Epoch 20 finished. Avg Actor Loss: 6.1640, Avg Critic Loss: 0.6353
+2025-11-08 01:10:03 - __main__ - INFO - Pre-train Epoch 21 finished. Avg Actor Loss: 6.1015, Avg Critic Loss: 0.6317
+2025-11-08 01:10:06 - __main__ - INFO - Pre-train Epoch 22 finished. Avg Actor Loss: 6.0402, Avg Critic Loss: 0.6329
+2025-11-08 01:10:08 - __main__ - INFO - Pre-train Epoch 23 finished. Avg Actor Loss: 5.9831, Avg Critic Loss: 0.6276
+2025-11-08 01:10:10 - __main__ - INFO - Pre-train Epoch 24 finished. Avg Actor Loss: 5.9267, Avg Critic Loss: 0.6276
+2025-11-08 01:10:12 - __main__ - INFO - Pre-train Epoch 25 finished. Avg Actor Loss: 5.8760, Avg Critic Loss: 0.6225
+2025-11-08 01:10:14 - __main__ - INFO - Pre-train Epoch 26 finished. Avg Actor Loss: 5.8267, Avg Critic Loss: 0.6206
+2025-11-08 01:10:16 - __main__ - INFO - Pre-train Epoch 27 finished. Avg Actor Loss: 5.7808, Avg Critic Loss: 0.6180
+2025-11-08 01:10:18 - __main__ - INFO - Pre-train Epoch 28 finished. Avg Actor Loss: 5.7339, Avg Critic Loss: 0.6159
+2025-11-08 01:10:20 - __main__ - INFO - Pre-train Epoch 29 finished. Avg Actor Loss: 5.6946, Avg Critic Loss: 0.6131
+2025-11-08 01:10:23 - __main__ - INFO - Pre-train Epoch 30 finished. Avg Actor Loss: 5.6488, Avg Critic Loss: 0.6119
+2025-11-08 01:10:25 - __main__ - INFO - Pre-train Epoch 31 finished. Avg Actor Loss: 5.6115, Avg Critic Loss: 0.6108
+2025-11-08 01:10:27 - __main__ - INFO - Pre-train Epoch 32 finished. Avg Actor Loss: 5.5744, Avg Critic Loss: 0.6086
+2025-11-08 01:10:29 - __main__ - INFO - Pre-train Epoch 33 finished. Avg Actor Loss: 5.5359, Avg Critic Loss: 0.6043
+2025-11-08 01:10:31 - __main__ - INFO - Pre-train Epoch 34 finished. Avg Actor Loss: 5.5020, Avg Critic Loss: 0.6027
+2025-11-08 01:10:33 - __main__ - INFO - Pre-train Epoch 35 finished. Avg Actor Loss: 5.4686, Avg Critic Loss: 0.6014
+2025-11-08 01:10:36 - __main__ - INFO - Pre-train Epoch 36 finished. Avg Actor Loss: 5.4333, Avg Critic Loss: 0.6007
+2025-11-08 01:10:38 - __main__ - INFO - Pre-train Epoch 37 finished. Avg Actor Loss: 5.4001, Avg Critic Loss: 0.5979
+2025-11-08 01:10:40 - __main__ - INFO - Pre-train Epoch 38 finished. Avg Actor Loss: 5.3688, Avg Critic Loss: 0.5940
+2025-11-08 01:10:42 - __main__ - INFO - Pre-train Epoch 39 finished. Avg Actor Loss: 5.3346, Avg Critic Loss: 0.5942
+2025-11-08 01:10:44 - __main__ - INFO - Pre-train Epoch 40 finished. Avg Actor Loss: 5.3062, Avg Critic Loss: 0.5922
+2025-11-08 01:10:46 - __main__ - INFO - Pre-train Epoch 41 finished. Avg Actor Loss: 5.2722, Avg Critic Loss: 0.5909
+2025-11-08 01:10:48 - __main__ - INFO - Pre-train Epoch 42 finished. Avg Actor Loss: 5.2434, Avg Critic Loss: 0.5896
+2025-11-08 01:10:51 - __main__ - INFO - Pre-train Epoch 43 finished. Avg Actor Loss: 5.2144, Avg Critic Loss: 0.5835
+2025-11-08 01:10:53 - __main__ - INFO - Pre-train Epoch 44 finished. Avg Actor Loss: 5.1858, Avg Critic Loss: 0.5827
+2025-11-08 01:10:55 - __main__ - INFO - Pre-train Epoch 45 finished. Avg Actor Loss: 5.1528, Avg Critic Loss: 0.5808
+2025-11-08 01:10:57 - __main__ - INFO - Pre-train Epoch 46 finished. Avg Actor Loss: 5.1275, Avg Critic Loss: 0.5788
+2025-11-08 01:10:59 - __main__ - INFO - Pre-train Epoch 47 finished. Avg Actor Loss: 5.1016, Avg Critic Loss: 0.5766
+2025-11-08 01:11:01 - __main__ - INFO - Pre-train Epoch 48 finished. Avg Actor Loss: 5.0683, Avg Critic Loss: 0.5745
+2025-11-08 01:11:03 - __main__ - INFO - Pre-train Epoch 49 finished. Avg Actor Loss: 5.0437, Avg Critic Loss: 0.5729
+2025-11-08 01:11:05 - __main__ - INFO - Pre-train Epoch 50 finished. Avg Actor Loss: 5.0166, Avg Critic Loss: 0.5702
+2025-11-08 01:11:08 - __main__ - INFO - Pre-train Epoch 51 finished. Avg Actor Loss: 4.9907, Avg Critic Loss: 0.5681
+2025-11-08 01:11:10 - __main__ - INFO - Pre-train Epoch 52 finished. Avg Actor Loss: 4.9616, Avg Critic Loss: 0.5674
+2025-11-08 01:11:12 - __main__ - INFO - Pre-train Epoch 53 finished. Avg Actor Loss: 4.9359, Avg Critic Loss: 0.5658
+2025-11-08 01:11:14 - __main__ - INFO - Pre-train Epoch 54 finished. Avg Actor Loss: 4.9096, Avg Critic Loss: 0.5641
+2025-11-08 01:11:16 - __main__ - INFO - Pre-train Epoch 55 finished. Avg Actor Loss: 4.8825, Avg Critic Loss: 0.5615
+2025-11-08 01:11:18 - __main__ - INFO - Pre-train Epoch 56 finished. Avg Actor Loss: 4.8537, Avg Critic Loss: 0.5614
+2025-11-08 01:11:21 - __main__ - INFO - Pre-train Epoch 57 finished. Avg Actor Loss: 4.8280, Avg Critic Loss: 0.5573
+2025-11-08 01:11:23 - __main__ - INFO - Pre-train Epoch 58 finished. Avg Actor Loss: 4.8034, Avg Critic Loss: 0.5570
+2025-11-08 01:11:25 - __main__ - INFO - Pre-train Epoch 59 finished. Avg Actor Loss: 4.7775, Avg Critic Loss: 0.5555
+2025-11-08 01:11:27 - __main__ - INFO - Pre-train Epoch 60 finished. Avg Actor Loss: 4.7516, Avg Critic Loss: 0.5501
+2025-11-08 01:11:29 - __main__ - INFO - Pre-train Epoch 61 finished. Avg Actor Loss: 4.7240, Avg Critic Loss: 0.5506
+2025-11-08 01:11:31 - __main__ - INFO - Pre-train Epoch 62 finished. Avg Actor Loss: 4.7016, Avg Critic Loss: 0.5477
+2025-11-08 01:11:33 - __main__ - INFO - Pre-train Epoch 63 finished. Avg Actor Loss: 4.6714, Avg Critic Loss: 0.5464
+2025-11-08 01:11:35 - __main__ - INFO - Pre-train Epoch 64 finished. Avg Actor Loss: 4.6483, Avg Critic Loss: 0.5455
+2025-11-08 01:11:38 - __main__ - INFO - Pre-train Epoch 65 finished. Avg Actor Loss: 4.6235, Avg Critic Loss: 0.5411
+2025-11-08 01:11:40 - __main__ - INFO - Pre-train Epoch 66 finished. Avg Actor Loss: 4.5970, Avg Critic Loss: 0.5411
+2025-11-08 01:11:42 - __main__ - INFO - Pre-train Epoch 67 finished. Avg Actor Loss: 4.5684, Avg Critic Loss: 0.5407
+2025-11-08 01:11:44 - __main__ - INFO - Pre-train Epoch 68 finished. Avg Actor Loss: 4.5442, Avg Critic Loss: 0.5380
+2025-11-08 01:11:46 - __main__ - INFO - Pre-train Epoch 69 finished. Avg Actor Loss: 4.5201, Avg Critic Loss: 0.5350
+2025-11-08 01:11:48 - __main__ - INFO - Pre-train Epoch 70 finished. Avg Actor Loss: 4.4948, Avg Critic Loss: 0.5333
+2025-11-08 01:11:50 - __main__ - INFO - Pre-train Epoch 71 finished. Avg Actor Loss: 4.4763, Avg Critic Loss: 0.5311
+2025-11-08 01:11:53 - __main__ - INFO - Pre-train Epoch 72 finished. Avg Actor Loss: 4.4477, Avg Critic Loss: 0.5301
+2025-11-08 01:11:55 - __main__ - INFO - Pre-train Epoch 73 finished. Avg Actor Loss: 4.4241, Avg Critic Loss: 0.5285
+2025-11-08 01:11:57 - __main__ - INFO - Pre-train Epoch 74 finished. Avg Actor Loss: 4.3978, Avg Critic Loss: 0.5257
+2025-11-08 01:11:59 - __main__ - INFO - Pre-train Epoch 75 finished. Avg Actor Loss: 4.3703, Avg Critic Loss: 0.5250
+2025-11-08 01:12:01 - __main__ - INFO - Pre-train Epoch 76 finished. Avg Actor Loss: 4.3504, Avg Critic Loss: 0.5238
+2025-11-08 01:12:03 - __main__ - INFO - Pre-train Epoch 77 finished. Avg Actor Loss: 4.3207, Avg Critic Loss: 0.5206
+2025-11-08 01:12:06 - __main__ - INFO - Pre-train Epoch 78 finished. Avg Actor Loss: 4.2970, Avg Critic Loss: 0.5215
+2025-11-08 01:12:08 - __main__ - INFO - Pre-train Epoch 79 finished. Avg Actor Loss: 4.2713, Avg Critic Loss: 0.5178
+2025-11-08 01:12:10 - __main__ - INFO - Pre-train Epoch 80 finished. Avg Actor Loss: 4.2478, Avg Critic Loss: 0.5156
+2025-11-08 01:12:12 - __main__ - INFO - Pre-train Epoch 81 finished. Avg Actor Loss: 4.2237, Avg Critic Loss: 0.5153
+2025-11-08 01:12:14 - __main__ - INFO - Pre-train Epoch 82 finished. Avg Actor Loss: 4.2012, Avg Critic Loss: 0.5125
+2025-11-08 01:12:16 - __main__ - INFO - Pre-train Epoch 83 finished. Avg Actor Loss: 4.1746, Avg Critic Loss: 0.5104
+2025-11-08 01:12:18 - __main__ - INFO - Pre-train Epoch 84 finished. Avg Actor Loss: 4.1524, Avg Critic Loss: 0.5100
+2025-11-08 01:12:20 - __main__ - INFO - Pre-train Epoch 85 finished. Avg Actor Loss: 4.1261, Avg Critic Loss: 0.5084
+2025-11-08 01:12:23 - __main__ - INFO - Pre-train Epoch 86 finished. Avg Actor Loss: 4.1015, Avg Critic Loss: 0.5051
+2025-11-08 01:12:25 - __main__ - INFO - Pre-train Epoch 87 finished. Avg Actor Loss: 4.0767, Avg Critic Loss: 0.5051
+2025-11-08 01:12:27 - __main__ - INFO - Pre-train Epoch 88 finished. Avg Actor Loss: 4.0544, Avg Critic Loss: 0.5037
+2025-11-08 01:12:29 - __main__ - INFO - Pre-train Epoch 89 finished. Avg Actor Loss: 4.0287, Avg Critic Loss: 0.4997
+2025-11-08 01:12:31 - __main__ - INFO - Pre-train Epoch 90 finished. Avg Actor Loss: 4.0077, Avg Critic Loss: 0.5002
+2025-11-08 01:12:33 - __main__ - INFO - Pre-train Epoch 91 finished. Avg Actor Loss: 3.9803, Avg Critic Loss: 0.4985
+2025-11-08 01:12:36 - __main__ - INFO - Pre-train Epoch 92 finished. Avg Actor Loss: 3.9582, Avg Critic Loss: 0.4974
+2025-11-08 01:12:38 - __main__ - INFO - Pre-train Epoch 93 finished. Avg Actor Loss: 3.9337, Avg Critic Loss: 0.4947
+2025-11-08 01:12:40 - __main__ - INFO - Pre-train Epoch 94 finished. Avg Actor Loss: 3.9144, Avg Critic Loss: 0.4942
+2025-11-08 01:12:42 - __main__ - INFO - Pre-train Epoch 95 finished. Avg Actor Loss: 3.8871, Avg Critic Loss: 0.4924
+2025-11-08 01:12:44 - __main__ - INFO - Pre-train Epoch 96 finished. Avg Actor Loss: 3.8643, Avg Critic Loss: 0.4909
+2025-11-08 01:12:46 - __main__ - INFO - Pre-train Epoch 97 finished. Avg Actor Loss: 3.8426, Avg Critic Loss: 0.4906
+2025-11-08 01:12:49 - __main__ - INFO - Pre-train Epoch 98 finished. Avg Actor Loss: 3.8216, Avg Critic Loss: 0.4894
+2025-11-08 01:12:51 - __main__ - INFO - Pre-train Epoch 99 finished. Avg Actor Loss: 3.7924, Avg Critic Loss: 0.4857
+2025-11-08 01:12:53 - __main__ - INFO - Pre-train Epoch 100 finished. Avg Actor Loss: 3.7728, Avg Critic Loss: 0.4859
+2025-11-08 01:12:53 - __main__ - INFO - --- MMR Pre-training Finished ---
+2025-11-08 01:12:53 - __main__ - INFO - Pre-trained model saved to: checkpoints/rl_icl_qwen_mmr_pretrained.pt

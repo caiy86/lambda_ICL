@@ -1,0 +1,74 @@
+2025-11-10 20:17:44 - root - INFO - Logging setup complete. Outputting to console and file: logs/rl_icl_pretrain/1110_2017.log
+2025-11-10 20:17:44 - root - INFO - Initialized all random seeds to: 42
+2025-11-10 20:17:44 - __main__ - INFO - Using device: cuda
+2025-11-10 20:17:44 - __main__ - INFO - --- Loading Models & Data for Pre-training ---
+2025-11-10 20:17:44 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-10 20:17:44 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-10 20:17:54 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-10 20:17:54 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-11-10 20:17:59 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-11-10 20:17:59 - models.policy_network - INFO - Initializing PolicyNetwork (Type: LSTM)
+2025-11-10 20:17:59 - data_utils.mtop_loader - INFO - --- Creating Corpus (Action Space) ---
+2025-11-10 20:17:59 - data_utils.mtop_loader - INFO - Loading full 'train' split (no global cache used)...
+2025-11-10 20:18:07 - data_utils.mtop_loader - INFO - Loading EmbeddingModel (all-MiniLM-L6-v2) for K-Means/Sampling...
+2025-11-10 20:18:07 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-10 20:18:07 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-10 20:18:14 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-10 20:18:14 - data_utils.mtop_loader - INFO - Pre-computing all training data embeddings...
+2025-11-10 20:18:16 - data_utils.mtop_loader - INFO - Full train data and embeddings loaded (15667 samples).
+2025-11-10 20:18:16 - data_utils.mtop_loader - WARNING - USE_CLUSTERED_CORPUS=False. Using the *entire* training dataset (15667 samples) as corpus.
+2025-11-10 20:18:16 - data_utils.mtop_loader - INFO - Corpus created. Final size: 15667
+2025-11-10 20:18:16 - __main__ - INFO - Corpus loaded. Size: 15667, Embeddings shape: torch.Size([15667, 384])
+2025-11-10 20:18:16 - __main__ - INFO - Loading 'dev' split for MMR evaluation...
+2025-11-10 20:18:16 - data_utils.mtop_loader - INFO - Loading query dataloader (split=dev, batch_size=32, shuffle=False)...
+2025-11-10 20:18:19 - __main__ - INFO - --- Running MMR Expert Baseline Evaluation ---
+2025-11-10 20:18:19 - __main__ - INFO - Starting evaluation (Mode: mmr)...
+2025-11-10 20:18:19 - __main__ - INFO - with MMR lambda = 0.5.
+2025-11-10 20:20:15 - __main__ - INFO - Evaluation Pretrain (Mode: mmr) Finished. Accuracy: 36.38% (813/2235), Avg NLL: 0.0488
+2025-11-10 20:20:15 - __main__ - INFO - Saving evaluation results to file...
+2025-11-10 20:20:15 - __main__ - INFO - Evaluation results saved to: 1110_2017/eval_results/val_results_pretrain_mmr.csv
+2025-11-10 20:20:15 - __main__ - INFO - --- MMR Expert Baseline Evaluation Finished ---
+2025-11-10 20:20:15 - data_utils.mtop_loader - INFO - Loading query dataloader (split=train, batch_size=32, shuffle=False)...
+2025-11-10 20:20:15 - data_utils.mtop_loader - INFO - Loading 'train' split data from Hugging Face...
+2025-11-10 20:20:19 - data_utils.mtop_loader - INFO - Randomly sampling 5000 examples for 'train' split...
+2025-11-10 20:20:19 - __main__ - INFO - --- Generating MMR Expert Trajectories ---
+2025-11-10 20:20:21 - __main__ - INFO - Generated 5000 MMR trajectories.
+2025-11-10 20:20:21 - engine.reward_computer - INFO - RewardComputer initialized with GAE (gamma=0.99, lambda=0.95)
+2025-11-10 20:20:21 - __main__ - INFO - --- Computing Expert Returns for MMR Trajectories ---
+2025-11-10 20:20:22 - __main__ - ERROR - An unhandled exception occurred!
+Traceback (most recent call last):
+  File "/home/caiy/python/RetICL/my_reticl/pretrain.py", line 529, in <module>
+    main()
+  File "/home/caiy/python/RetICL/my_reticl/pretrain.py", line 473, in main
+    expert_returns = compute_expert_returns(
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/caiy/python/RetICL/my_reticl/pretrain.py", line 311, in compute_expert_returns
+    buffer = reward_computer.compute_rewards_and_advantages(
+  File "/home/caiy/python/RetICL/my_reticl/engine/reward_computer.py", line 75, in compute_rewards_and_advantages
+    per_sample_loss = llm_wrapper.get_batch_loss(prompts, targets)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/caiy/python/RetICL/my_reticl/models/llm_wrapper.py", line 99, in get_batch_loss
+    outputs = self.model(
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/accelerate/hooks.py", line 175, in new_forward
+    output = module._old_forward(*args, **kwargs)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/transformers/utils/generic.py", line 918, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 498, in forward
+    loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/transformers/loss/loss_utils.py", line 67, in ForCausalLMLoss
+    loss = fixed_cross_entropy(logits, shift_labels, num_items_in_batch, ignore_index, **kwargs)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/transformers/loss/loss_utils.py", line 36, in fixed_cross_entropy
+    loss = nn.functional.cross_entropy(source, target, ignore_index=ignore_index, reduction=reduction)
+  File "/home/caiy/miniconda3/envs/ICL/lib/python3.10/site-packages/torch/nn/functional.py", line 3479, in cross_entropy
+    return torch._C._nn.cross_entropy_loss(
+RuntimeError: CUDA error: unspecified launch failure
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

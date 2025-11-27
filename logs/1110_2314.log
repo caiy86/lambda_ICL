@@ -1,0 +1,34 @@
+2025-11-10 23:14:10 - root - INFO - Logging setup complete. Outputting to console and file: logs/1110_2314.log
+2025-11-10 23:14:10 - root - INFO - Initialized all random seeds to: 42
+2025-11-10 23:14:10 - __main__ - INFO - Using device: cuda
+2025-11-10 23:14:10 - __main__ - INFO - Starting run: 1110_2314
+2025-11-10 23:14:10 - __main__ - INFO - --- Initializing Models ---
+2025-11-10 23:14:10 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-10 23:14:10 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-10 23:14:20 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-10 23:14:20 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-11-10 23:14:23 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-11-10 23:14:23 - models.policy_network - INFO - Initializing PolicyNetwork (Type: LSTM)
+2025-11-10 23:14:23 - __main__ - WARNING - Pre-trained model not found at: checkpoints/mtop_pretrained.pt
+2025-11-10 23:14:23 - __main__ - WARNING - Starting PPO training from random initialization.
+2025-11-10 23:14:23 - __main__ - INFO - --- Loading Data ---
+2025-11-10 23:14:23 - data_utils.mtop_loader - INFO - --- Creating Corpus (Action Space) ---
+2025-11-10 23:14:23 - data_utils.mtop_loader - INFO - Loading full 'train' split (no global cache used)...
+2025-11-10 23:14:30 - data_utils.mtop_loader - INFO - Loading EmbeddingModel (all-MiniLM-L6-v2) for K-Means/Sampling...
+2025-11-10 23:14:30 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-10 23:14:30 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-10 23:14:37 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-10 23:14:37 - data_utils.mtop_loader - INFO - Pre-computing all training data embeddings...
+2025-11-10 23:14:39 - data_utils.mtop_loader - INFO - Full train data and embeddings loaded (15667 samples).
+2025-11-10 23:14:39 - data_utils.mtop_loader - WARNING - USE_CLUSTERED_CORPUS=False. Using the *entire* training dataset (15667 samples) as corpus.
+2025-11-10 23:14:39 - data_utils.mtop_loader - INFO - Corpus created. Final size: 15667
+2025-11-10 23:14:39 - __main__ - INFO - Pre-computing corpus embeddings...
+2025-11-10 23:14:39 - __main__ - ERROR - An unhandled exception occurred!
+Traceback (most recent call last):
+  File "/home/caiy/python/RetICL/my_reticl/main.py", line 368, in <module>
+    train()
+  File "/home/caiy/python/RetICL/my_reticl/main.py", line 213, in train
+    corpus_queries = [item['query'] for item in corpus_data]
+  File "/home/caiy/python/RetICL/my_reticl/main.py", line 213, in <listcomp>
+    corpus_queries = [item['query'] for item in corpus_data]
+TypeError: list indices must be integers or slices, not str

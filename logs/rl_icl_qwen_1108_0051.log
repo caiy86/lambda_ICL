@@ -1,0 +1,26 @@
+2025-11-08 00:51:51 - root - INFO - Logging setup complete. Outputting to console and file: logs/rl_icl_qwen_1108_0051.log
+2025-11-08 00:51:51 - root - INFO - Initialized all random seeds to: 42
+2025-11-08 00:51:51 - __main__ - INFO - Using device: cuda
+2025-11-08 00:51:51 - __main__ - INFO - Starting run: rl_icl_qwen_1108_0051
+2025-11-08 00:51:51 - __main__ - INFO - --- Initializing Models ---
+2025-11-08 00:51:51 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-08 00:51:51 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-08 00:52:02 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-08 00:52:02 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-11-08 00:52:05 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-11-08 00:52:05 - models.policy_network - INFO - Initializing PolicyNetwork (Type: LSTM)
+2025-11-08 00:52:06 - __main__ - INFO - Successfully loaded pre-trained MMR weights from: checkpoints/rl_icl_qwen_mmr_pretrained.pt
+2025-11-08 00:52:06 - __main__ - INFO - --- Loading Data ---
+2025-11-08 00:52:06 - data_utils.mtop_loader - INFO - Loading MTOP corpus (from 'train' split)...
+2025-11-08 00:52:17 - data_utils.mtop_loader - INFO - Loaded 15667 examples into corpus.
+2025-11-08 00:52:17 - __main__ - INFO - Pre-computing corpus embeddings...
+2025-11-08 00:52:19 - __main__ - INFO - Corpus embeddings computed. Shape: torch.Size([15667, 384])
+2025-11-08 00:52:19 - data_utils.mtop_loader - INFO - Loading MTOP query dataloader (split=train, batch_size=16, shuffle=True)...
+2025-11-08 00:52:24 - data_utils.mtop_loader - INFO - Loading MTOP query dataloader (split=dev, batch_size=64, shuffle=False)...
+2025-11-08 00:52:45 - __main__ - INFO - --- Initializing PPO Components ---
+2025-11-08 00:52:45 - engine.sampler - INFO - EpisodeSampler initialized for 4 steps.
+2025-11-08 00:52:45 - engine.reward_computer - INFO - RewardComputer initialized with GAE (gamma=0.99, lambda=0.95)
+2025-11-08 00:52:45 - __main__ - INFO - --- Starting Training Loop ---
+2025-11-08 00:52:45 - __main__ - INFO - --- Running Initial kNN Baseline Evaluation ---
+2025-11-08 00:52:45 - __main__ - INFO - --- kNN Baseline Evaluation Finished ---
+2025-11-08 00:52:45 - __main__ - INFO - Starting Epoch 1/100

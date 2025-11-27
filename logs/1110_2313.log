@@ -1,0 +1,19 @@
+2025-11-10 23:13:13 - root - INFO - Logging setup complete. Outputting to console and file: logs/1110_2313.log
+2025-11-10 23:13:13 - root - INFO - Initialized all random seeds to: 42
+2025-11-10 23:13:13 - __main__ - INFO - Using device: cuda
+2025-11-10 23:13:13 - __main__ - INFO - Starting run: 1110_2313
+2025-11-10 23:13:13 - __main__ - INFO - --- Initializing Models ---
+2025-11-10 23:13:13 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-10 23:13:13 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-10 23:13:24 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-10 23:13:24 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-11-10 23:13:28 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-11-10 23:13:28 - models.policy_network - INFO - Initializing PolicyNetwork (Type: LSTM)
+2025-11-10 23:13:29 - __main__ - WARNING - Pre-trained model not found at: checkpoints/rl_icl_qwen_mmr_pretrained.pt
+2025-11-10 23:13:29 - __main__ - WARNING - Starting PPO training from random initialization.
+2025-11-10 23:13:29 - __main__ - INFO - --- Loading Data ---
+2025-11-10 23:13:29 - data_utils.mtop_loader - INFO - --- Creating Corpus (Action Space) ---
+2025-11-10 23:13:29 - data_utils.mtop_loader - INFO - Loading full 'train' split (no global cache used)...
+2025-11-10 23:13:36 - data_utils.mtop_loader - INFO - Loading EmbeddingModel (all-MiniLM-L6-v2) for K-Means/Sampling...
+2025-11-10 23:13:36 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-10 23:13:36 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2

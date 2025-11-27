@@ -1,0 +1,121 @@
+2025-11-11 11:14:16 - root - INFO - Logging setup complete. Outputting to console and file: logs/1111_1114.log
+2025-11-11 11:14:16 - root - INFO - Initialized all random seeds to: 42
+2025-11-11 11:14:16 - __main__ - INFO - Using device: cuda
+2025-11-11 11:14:16 - __main__ - INFO - Starting run: 1111_1114
+2025-11-11 11:14:16 - __main__ - INFO - --- Initializing Models ---
+2025-11-11 11:14:16 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-11 11:14:16 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-11 11:14:23 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-11 11:14:23 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-11-11 11:14:26 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-11-11 11:14:26 - models.policy_network - INFO - Initializing PolicyNetwork (Type: LSTM)
+2025-11-11 11:14:26 - __main__ - INFO - Successfully loaded pre-trained MMR weights from: checkpoints/pretrain/mtop_pretrained.pt
+2025-11-11 11:14:26 - __main__ - INFO - --- Loading Data ---
+2025-11-11 11:14:26 - data_utils.mtop_loader - INFO - --- Creating Corpus (Action Space) ---
+2025-11-11 11:14:26 - data_utils.mtop_loader - INFO - Loading full 'train' split (no global cache used)...
+2025-11-11 11:14:31 - data_utils.mtop_loader - INFO - Loading EmbeddingModel (all-MiniLM-L6-v2) for K-Means/Sampling...
+2025-11-11 11:14:31 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-11-11 11:14:31 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-11-11 11:14:37 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-11-11 11:14:37 - data_utils.mtop_loader - INFO - Pre-computing all training data embeddings...
+2025-11-11 11:14:39 - data_utils.mtop_loader - INFO - Full train data and embeddings loaded (15667 samples).
+2025-11-11 11:14:39 - data_utils.mtop_loader - WARNING - USE_CLUSTERED_CORPUS=False. Using the *entire* training dataset (15667 samples) as corpus.
+2025-11-11 11:14:39 - data_utils.mtop_loader - INFO - Corpus created. Final size: 15667
+2025-11-11 11:14:39 - __main__ - INFO - Corpus embeddings computed. Shape: torch.Size([15667, 384])
+2025-11-11 11:14:39 - data_utils.mtop_loader - INFO - Loading query dataloader (split=train, batch_size=16, shuffle=True)...
+2025-11-11 11:14:39 - data_utils.mtop_loader - INFO - Loading 'train' split data from Hugging Face...
+2025-11-11 11:14:43 - data_utils.mtop_loader - INFO - Randomly sampling 5000 examples for 'train' split...
+2025-11-11 11:14:43 - data_utils.mtop_loader - INFO - Loading query dataloader (split=dev, batch_size=64, shuffle=False)...
+2025-11-11 11:14:45 - __main__ - INFO - --- Initializing PPO Components ---
+2025-11-11 11:14:45 - engine.sampler - INFO - EpisodeSampler initialized for 4 steps.
+2025-11-11 11:14:45 - engine.reward_computer - INFO - RewardComputer initialized with GAE (gamma=0.99, lambda=0.95)
+2025-11-11 11:14:45 - __main__ - INFO - --- Starting Training Loop ---
+2025-11-11 11:14:45 - __main__ - INFO - --- Running Initial kNN Baseline Evaluation ---
+2025-11-11 11:14:45 - __main__ - INFO - --- kNN Baseline Evaluation Finished ---
+2025-11-11 11:14:45 - __main__ - INFO - Starting Epoch 1/100
+2025-11-11 11:15:28 - __main__ - INFO - Starting evaluation (Mode: POLICY) for Epoch 1...
+2025-11-11 11:18:11 - __main__ - INFO - Evaluation Epoch 1 (Mode: POLICY) Finished. Accuracy: 21.92% (490/2235), Avg NLL: 0.0739
+2025-11-11 11:18:11 - __main__ - INFO - Saving evaluation results to file...
+2025-11-11 11:18:11 - __main__ - INFO - Evaluation results saved to: outputs/val_results_1111_1114_epoch_1_policy.csv
+2025-11-11 11:18:11 - __main__ - INFO - New best validation accuracy: 21.92%! Saving model...
+2025-11-11 11:18:11 - __main__ - INFO - Starting Epoch 2/100
+2025-11-11 11:18:54 - __main__ - INFO - Starting Epoch 3/100
+2025-11-11 11:19:37 - __main__ - INFO - Starting Epoch 4/100
+2025-11-11 11:20:21 - __main__ - INFO - Starting Epoch 5/100
+2025-11-11 11:21:04 - __main__ - INFO - Starting Epoch 6/100
+2025-11-11 11:21:49 - __main__ - INFO - Starting Epoch 7/100
+2025-11-11 11:22:36 - __main__ - INFO - Starting Epoch 8/100
+2025-11-11 11:23:21 - __main__ - INFO - Starting Epoch 9/100
+2025-11-11 11:24:13 - __main__ - INFO - Starting Epoch 10/100
+2025-11-11 11:24:58 - __main__ - INFO - Starting evaluation (Mode: POLICY) for Epoch 10...
+2025-11-11 11:27:34 - __main__ - INFO - Evaluation Epoch 10 (Mode: POLICY) Finished. Accuracy: 19.19% (429/2235), Avg NLL: 0.0904
+2025-11-11 11:27:34 - __main__ - INFO - Saving evaluation results to file...
+2025-11-11 11:27:34 - __main__ - INFO - Evaluation results saved to: outputs/val_results_1111_1114_epoch_10_policy.csv
+2025-11-11 11:27:34 - __main__ - INFO - Starting Epoch 11/100
+2025-11-11 11:28:18 - __main__ - INFO - Starting Epoch 12/100
+2025-11-11 11:29:02 - __main__ - INFO - Starting Epoch 13/100
+2025-11-11 11:29:45 - __main__ - INFO - Starting Epoch 14/100
+2025-11-11 11:30:30 - __main__ - INFO - Starting Epoch 15/100
+2025-11-11 11:31:15 - __main__ - INFO - Starting Epoch 16/100
+2025-11-11 11:31:57 - __main__ - INFO - Starting Epoch 17/100
+2025-11-11 11:32:40 - __main__ - INFO - Starting Epoch 18/100
+2025-11-11 11:33:28 - __main__ - INFO - Starting Epoch 19/100
+2025-11-11 11:34:10 - __main__ - INFO - Starting Epoch 20/100
+2025-11-11 11:34:53 - __main__ - INFO - Starting evaluation (Mode: POLICY) for Epoch 20...
+2025-11-11 11:36:57 - __main__ - INFO - Evaluation Epoch 20 (Mode: POLICY) Finished. Accuracy: 22.33% (499/2235), Avg NLL: 0.0798
+2025-11-11 11:36:57 - __main__ - INFO - Saving evaluation results to file...
+2025-11-11 11:36:57 - __main__ - INFO - Evaluation results saved to: outputs/val_results_1111_1114_epoch_20_policy.csv
+2025-11-11 11:36:57 - __main__ - INFO - New best validation accuracy: 22.33%! Saving model...
+2025-11-11 11:36:57 - __main__ - INFO - Starting Epoch 21/100
+2025-11-11 11:37:41 - __main__ - INFO - Starting Epoch 22/100
+2025-11-11 11:38:26 - __main__ - INFO - Starting Epoch 23/100
+2025-11-11 11:39:11 - __main__ - INFO - Starting Epoch 24/100
+2025-11-11 11:39:56 - __main__ - INFO - Starting Epoch 25/100
+2025-11-11 11:40:41 - __main__ - INFO - Starting Epoch 26/100
+2025-11-11 11:41:26 - __main__ - INFO - Starting Epoch 27/100
+2025-11-11 11:42:11 - __main__ - INFO - Starting Epoch 28/100
+2025-11-11 11:42:57 - __main__ - INFO - Starting Epoch 29/100
+2025-11-11 11:43:43 - __main__ - INFO - Starting Epoch 30/100
+2025-11-11 11:44:29 - __main__ - INFO - Starting evaluation (Mode: POLICY) for Epoch 30...
+2025-11-11 11:46:57 - __main__ - INFO - Evaluation Epoch 30 (Mode: POLICY) Finished. Accuracy: 23.40% (523/2235), Avg NLL: 0.0778
+2025-11-11 11:46:57 - __main__ - INFO - Saving evaluation results to file...
+2025-11-11 11:46:57 - __main__ - INFO - Evaluation results saved to: outputs/val_results_1111_1114_epoch_30_policy.csv
+2025-11-11 11:46:57 - __main__ - INFO - New best validation accuracy: 23.40%! Saving model...
+2025-11-11 11:46:57 - __main__ - INFO - Starting Epoch 31/100
+2025-11-11 11:47:45 - __main__ - INFO - Starting Epoch 32/100
+2025-11-11 11:48:31 - __main__ - INFO - Starting Epoch 33/100
+2025-11-11 11:49:18 - __main__ - INFO - Starting Epoch 34/100
+2025-11-11 11:50:04 - __main__ - INFO - Starting Epoch 35/100
+2025-11-11 11:50:50 - __main__ - INFO - Starting Epoch 36/100
+2025-11-11 11:51:35 - __main__ - INFO - Starting Epoch 37/100
+2025-11-11 11:52:20 - __main__ - INFO - Starting Epoch 38/100
+2025-11-11 11:53:04 - __main__ - INFO - Starting Epoch 39/100
+2025-11-11 11:53:48 - __main__ - INFO - Starting Epoch 40/100
+2025-11-11 11:54:33 - __main__ - INFO - Starting evaluation (Mode: POLICY) for Epoch 40...
+2025-11-11 11:56:39 - __main__ - INFO - Evaluation Epoch 40 (Mode: POLICY) Finished. Accuracy: 24.65% (551/2235), Avg NLL: 0.0750
+2025-11-11 11:56:39 - __main__ - INFO - Saving evaluation results to file...
+2025-11-11 11:56:39 - __main__ - INFO - Evaluation results saved to: outputs/val_results_1111_1114_epoch_40_policy.csv
+2025-11-11 11:56:39 - __main__ - INFO - New best validation accuracy: 24.65%! Saving model...
+2025-11-11 11:56:39 - __main__ - INFO - Starting Epoch 41/100
+2025-11-11 11:57:24 - __main__ - INFO - Starting Epoch 42/100
+2025-11-11 11:58:09 - __main__ - INFO - Starting Epoch 43/100
+2025-11-11 11:58:54 - __main__ - INFO - Starting Epoch 44/100
+2025-11-11 11:59:39 - __main__ - INFO - Starting Epoch 45/100
+2025-11-11 12:00:25 - __main__ - INFO - Starting Epoch 46/100
+2025-11-11 12:01:10 - __main__ - INFO - Starting Epoch 47/100
+2025-11-11 12:01:55 - __main__ - INFO - Starting Epoch 48/100
+2025-11-11 12:02:41 - __main__ - INFO - Starting Epoch 49/100
+2025-11-11 12:03:25 - __main__ - INFO - Starting Epoch 50/100
+2025-11-11 12:04:10 - __main__ - INFO - Starting evaluation (Mode: POLICY) for Epoch 50...
+2025-11-11 12:06:13 - __main__ - INFO - Evaluation Epoch 50 (Mode: POLICY) Finished. Accuracy: 26.26% (587/2235), Avg NLL: 0.0767
+2025-11-11 12:06:13 - __main__ - INFO - Saving evaluation results to file...
+2025-11-11 12:06:13 - __main__ - INFO - Evaluation results saved to: outputs/val_results_1111_1114_epoch_50_policy.csv
+2025-11-11 12:06:13 - __main__ - INFO - New best validation accuracy: 26.26%! Saving model...
+2025-11-11 12:06:13 - __main__ - INFO - Starting Epoch 51/100
+2025-11-11 12:06:57 - __main__ - INFO - Starting Epoch 52/100
+2025-11-11 12:07:41 - __main__ - INFO - Starting Epoch 53/100
+2025-11-11 12:08:26 - __main__ - INFO - Starting Epoch 54/100
+2025-11-11 12:09:11 - __main__ - INFO - Starting Epoch 55/100
+2025-11-11 12:09:57 - __main__ - INFO - Starting Epoch 56/100
+2025-11-11 12:10:43 - __main__ - INFO - Starting Epoch 57/100
+2025-11-11 12:11:30 - __main__ - INFO - Starting Epoch 58/100

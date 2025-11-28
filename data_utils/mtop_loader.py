@@ -25,7 +25,7 @@ def _get_full_train_data_and_embeddings() -> Tuple[List[Dict], torch.Tensor]:
     train_queries = [item['query'] for item in full_train_data]
     full_train_embeddings = emb_model.encode(
         train_queries, 
-        batch_size=config.BATCH_SIZE_VAL, 
+        batch_size=config.BATCH_SIZE, 
         show_progress_bar=True
     )
 
@@ -124,21 +124,26 @@ def get_corpus() -> Tuple[List[Dict[str, str]], torch.Tensor]:
     logger.info(f"Corpus created. Final size: {len(corpus_data)}")
     return corpus_data, corpus_embeddings.to(utils.device)
 
-def get_dataloader(split: str, 
-                   batch_size: int, 
-                   shuffle: bool = False,
-                   nums: int = None) -> DataLoader:
-    """
-    Get dataloader for specified split, limited by nums if provided.
-    """
-    logger.info(f"Loading query dataloader (split={split}, batch_size={batch_size}, shuffle={shuffle}, nums={nums})...")
+def get_dataloader(
+    split: str, 
+    batch_size: int, 
+    shuffle: bool = False,
+    nums: int = None,
+    seed: int = None
+) -> DataLoader:
+
+    logger.info(f"Loading query dataloader (split={split}, batch_size={batch_size}, shuffle={shuffle}, nums={nums}, seed={seed})...")
 
     data = _load_hf_data(split=split)
 
     if nums is not None and len(data) > nums:
         logger.info(f"Randomly sampling {nums} examples for '{split}' split...")
-        rng = random.Random(config.SEED)
-        query_data = rng.sample(data, nums)
+        if seed is None:
+            # Truly random
+            query_data = random.sample(data, nums)
+        else:
+            rng = random.Random(seed)
+            query_data = rng.sample(data, nums)
     else:
         if nums is not None:
             logger.info(f"Requested nums ({nums}) is larger than dataset size ({len(data)}). Using full dataset.")
@@ -154,10 +159,6 @@ def get_dataloader(split: str,
         pin_memory=False,
         collate_fn=_list_dict_collate_fn
     )
-
-# def check_correct(target_answer: str, pred_text: str) -> bool:
-
-#     return target_answer.strip().lower() == pred_text.strip().lower()
 
 def _split_children(content: str) -> List[str]:
 

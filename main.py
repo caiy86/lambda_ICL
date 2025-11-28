@@ -186,7 +186,7 @@ def run_evaluation(
 def train():
     os.makedirs(config.LOG_DIR, exist_ok=True)
     utils.setup_logging(log_level="INFO", log_file=os.path.join(config.LOG_DIR, f"{config.RUN_NAME}.log"))
-    utils.initialize_seeds(config.SEED)
+    # utils.initialize_seeds(config.SEED)
     device = utils.device
     logger.info(f"Using device: {device}")
     logger.info(f"Starting run: {config.RUN_NAME}")

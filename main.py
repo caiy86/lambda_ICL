@@ -244,20 +244,20 @@ def train():
 
     logger.info("--- Running Initial kNN Baseline Evaluation ---")
 
-    # run_evaluation(
-    #     llm_wrapper=llm_wrapper,
-    #     val_loader=val_loader,
-    #     corpus_data=corpus_data,
-    #     corpus_embeddings=corpus_embeddings,
-    #     check_correct_fn=dataloader.check_correct,
-    #     system_prompt=config.SYSTEM_PROMPT,
-    #     epoch=0, 
-    #     mode='mmr',           
-    #     sampler=None,
-    #     embedding_model=embedding_model,
-    #     num_examples=config.NUM_EXAMPLES,
-    #     mmr_baseline_lambda=0.7
-    # )
+    run_evaluation(
+        llm_wrapper=llm_wrapper,
+        val_loader=val_loader,
+        corpus_data=corpus_data,
+        corpus_embeddings=corpus_embeddings,
+        check_correct_fn=dataloader.check_correct,
+        system_prompt=config.SYSTEM_PROMPT,
+        epoch=0, 
+        mode='mmr',           
+        sampler=None,
+        embedding_model=embedding_model,
+        num_examples=config.NUM_EXAMPLES,
+        mmr_baseline_lambda=0.7
+    )
     
     logger.info("--- kNN Baseline Evaluation Finished ---")
     

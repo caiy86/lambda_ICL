@@ -27,7 +27,6 @@ def run_evaluation(llm_wrapper: LLMWrapper,
                    corpus_embeddings: torch.Tensor,
                    check_correct_fn: callable,
                    system_prompt: str,
-                   prompt_strategy: str,
                    mode: str,
                    sampler: Optional[EpisodeSampler] = None) -> float:
     
@@ -60,7 +59,6 @@ def run_evaluation(llm_wrapper: LLMWrapper,
                 system_prompt=system_prompt,
                 examples=example_data,
                 query=query_data['query'],
-                strategy=prompt_strategy
             )
             prompts.append(prompt_str)
             targets.append(query_data['answer'])
@@ -238,7 +236,7 @@ def main():
     dataset_path = f"{config.CACHE_DIR}/pretrain_dataset.pt"
     if os.path.exists(dataset_path):
         logger.info(f"Loading existing dataset from {dataset_path}...")
-        best_lambda_dataset = torch.load(dataset_path)
+        best_lambda_dataset = torch.load(dataset_path,weights_only=False)
     else:
         logger.info("Dataset not found. Generating new dataset...")
 
@@ -262,7 +260,7 @@ def main():
 
     logger.info("--- Evaluation ---")
     sampler = EpisodeSampler(agent, embedding_model, config.NUM_EXAMPLES)
-    val_loader = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False,nums=128,seed=None)
+    val_loader = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False,seed=None)
     
     run_evaluation(
         llm_wrapper=llm_wrapper,

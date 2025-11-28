@@ -38,24 +38,15 @@ class LLMWrapper:
     def build_chat_prompt(self, 
                           system_prompt: str, 
                           examples: List[Dict[str, str]], 
-                          query: str,
-                          strategy: str = 'multi_turn') -> str:
+                          query: str) -> str:
 
-        if strategy == 'multi_turn':
-            messages = [{"role": "system", "content": system_prompt}]
-            for ex in examples:
-                messages.extend([
-                    {"role": "user", "content": ex['query']},
-                    {"role": "assistant", "content": ex['answer']}
-                ])
-            messages.append({"role": "user", "content": query})
-
-        elif strategy == 'single_turn':
-            single_prompt = ""
-            for ex in examples:
-                single_prompt += f"Human:{ex['query']}\nComputer:{ex['answer']}\n\n"
-            single_prompt += f"Human:{query}\nComputer:"
-            messages = [{"role":"system","content":system_prompt},{"role":"user","content":single_prompt}]
+        messages = [{"role": "system", "content": system_prompt}]
+        for ex in examples:
+            messages.extend([
+                {"role": "user", "content": ex['query']},
+                {"role": "assistant", "content": ex['answer']}
+            ])
+        messages.append({"role": "user", "content": query})
 
         prompt_str = self.tokenizer.apply_chat_template(
             messages,

@@ -7,6 +7,7 @@ import logging
 from tqdm import tqdm
 from typing import List, Dict, Tuple, Optional
 import pandas as pd 
+import numpy as np
 
 from config import pretrain_config as config
 import utils
@@ -14,99 +15,56 @@ import data_utils.mtop_loader as dataloader
 from models.embedding_model import EmbeddingModel
 from models.llm_wrapper import LLMWrapper
 from models.policy_network import PolicyNetwork
-from engine.reward_computer import RewardComputer
-from engine.sampler import RolloutBuffer, EpisodeSampler
+from engine.sampler import EpisodeSampler, RolloutBuffer
 from utils import device
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1" 
 
 logger = logging.getLogger(__name__)
 
-
 @torch.no_grad()
-
-def run_evaluation(llm_wrapper: LLMWrapper,val_loader: torch.utils.data.DataLoader,corpus_data: List[Dict[str, str]],corpus_embeddings: torch.Tensor,check_correct_fn: callable,system_prompt: str,prompt_strategy: str,mode: str,sampler: Optional[EpisodeSampler] = None, embedding_model: Optional[EmbeddingModel] = None, num_examples: int = 4) -> float:
+def run_evaluation(llm_wrapper: LLMWrapper,
+                   val_loader: torch.utils.data.DataLoader,
+                   corpus_data: List[Dict[str, str]],
+                   corpus_embeddings: torch.Tensor,
+                   check_correct_fn: callable,
+                   system_prompt: str,
+                   prompt_strategy: str,
+                   mode: str,
+                   sampler: Optional[EpisodeSampler] = None, 
+                   embedding_model: Optional[EmbeddingModel] = None, 
+                   num_examples: int = 4) -> float:
     
     logger.info(f"Starting evaluation (Mode: {mode})...")
     
     if mode == 'policy' and sampler is None:
         raise ValueError("Sampler must be provided for 'policy' mode evaluation.")
-    if mode == 'mmr' and (embedding_model is None):
-        raise ValueError(f"EmbeddingModel must be provided for '{mode}' mode evaluation ")
-
     if mode == 'policy':
-        sampler.policy_network.eval() 
-    elif mode == "mmr":
-        logger.info(f"with MMR lambda = {config.MMR_LAMBDA}.")
+        sampler.policy_network.eval()
     
+    # 如果是 MMR Baseline 模式 (非 policy)，我们需要一个临时的 sampler 或者手动实现
+    # 为了简化，这里仅支持 'policy' 模式的评估 (用于验证预训练效果)
+    # 如果需要对比 baseline，建议使用 main.py
+    if mode != 'policy':
+        logger.warning("Pretrain evaluation currently only supports 'policy' mode fully. Treating as Policy evaluation if sampler provided.")
+
     total_correct = 0
     total_nll = 0.0 
     total_samples = 0
     
-    all_prompts: List[str] = []
-    all_generated_texts: List[str] = []
-    all_generated_nlls: List[float] = []
-    all_targets: List[str] = []
-
     for query_batch_list in tqdm(val_loader, desc=f"Validating pretrain ({mode})"):
         batch_size = len(query_batch_list)
         
-        if mode == 'policy':
-            buffer = sampler.collect_episodes(
-                query_batch=query_batch_list,
-                corpus=corpus_data,
-                corpus_embeddings=corpus_embeddings
-            )
-        else:
-            buffer = RolloutBuffer(num_examples, batch_size, embedding_model.dim, utils.device)
-            buffer.log_probs = None 
-            buffer.values = None
-            
-            query_texts = [item['query'] for item in query_batch_list]
-            buffer.queries = query_batch_list
-            query_embs = embedding_model.encode(query_texts)
-
-            sim_scores = torch.matmul(query_embs, corpus_embeddings.T)
-            
-            if mode == 'mmr':
-                selected_mask = torch.zeros_like(sim_scores, dtype=torch.bool)
-                relevance_scores = sim_scores
-                batch_selected_embs_mmr = torch.zeros((batch_size, num_examples, embedding_model.dim), device=utils.device)
-
-                for t in range(num_examples):
-                    if t == 0:
-                        step_scores = relevance_scores
-                    else:
-                        selected_embs_so_far = batch_selected_embs_mmr[:, :t, :]
-                        corpus_expanded = corpus_embeddings.unsqueeze(0).expand(batch_size, -1, -1)
-                        sim_to_selected = torch.bmm(
-                            corpus_expanded, 
-                            selected_embs_so_far.transpose(1, 2)
-                        )
-                        diversity_penalty, _ = torch.max(sim_to_selected, dim=2)
-                        step_scores = (config.MMR_LAMBDA * relevance_scores) - \
-                                      ((1 - config.MMR_LAMBDA) * diversity_penalty)
-
-                    step_scores.masked_fill_(selected_mask, -torch.inf)
-                    current_action = torch.argmax(step_scores, dim=1)
-
-                    current_embs = corpus_embeddings[current_action]
-                    selected_example_texts = [corpus_data[idx.item()] for idx in current_action]
-                    batch_selected_embs_mmr[:, t, :] = current_embs
-
-                    buffer.add_step_data(
-                        step=t,
-                        actions=current_action,
-                        example_embeddings=current_embs,
-                        example_texts=selected_example_texts
-                    )
-                    
-                    selected_mask.scatter_(dim=1, index=current_action.unsqueeze(1), value=True)
+        # 使用 Sampler 收集数据 (自适应 Lambda)
+        buffer = sampler.collect_episodes(
+            query_batch=query_batch_list,
+            corpus=corpus_data,
+            corpus_embeddings=corpus_embeddings
+        )
         
         prompts = []
         targets = []
         for i in range(batch_size):
             query_data = buffer.queries[i]
+            # 获取 Sampler 选出的样本
             example_data = buffer.selected_examples_text[i]
             
             prompt_str = llm_wrapper.build_chat_prompt(
@@ -131,22 +89,14 @@ def run_evaluation(llm_wrapper: LLMWrapper,val_loader: torch.utils.data.DataLoad
         for i in range(batch_size):
             pred_text = generated_texts[i]
             target_text = targets[i]
-            
             if check_correct_fn(target_answer=target_text, pred_text=pred_text):
                 total_correct += 1
-            
             total_nll += generated_nlls_list[i] 
         
         total_samples += batch_size
-        
-        all_prompts.extend(prompts)
-        all_generated_texts.extend(generated_texts)
-        all_generated_nlls.extend(generated_nlls_list)
-        all_targets.extend(targets)
 
     accuracy = 0.0
     avg_nll = float('inf')
-    
     if total_samples > 0:
         accuracy = (total_correct / total_samples) * 100
         avg_nll = total_nll / total_samples
@@ -156,166 +106,139 @@ def run_evaluation(llm_wrapper: LLMWrapper,val_loader: torch.utils.data.DataLoad
         f"Accuracy: {accuracy:.2f}% ({total_correct}/{total_samples}), "
         f"Avg NLL: {avg_nll:.4f}"
     )
-
-    logger.info("Saving evaluation results to file...")
-    all_correct = [
-        check_correct_fn(target, pred) 
-        for target, pred in zip(all_targets, all_generated_texts)
-    ]
-    df = pd.DataFrame({
-        "prompt": all_prompts,
-        "target": all_targets,
-        "prediction": all_generated_texts,
-        "nll": all_generated_nlls,
-        "is_correct": all_correct
-    })
-    os.makedirs("outputs", exist_ok=True) 
-
-    output_dir = os.path.join("results",config.PROJECT_NAME,config.RUN_NAME)
-    os.makedirs(output_dir, exist_ok=True)
-    output_filename = os.path.join(output_dir, f"val_results_pretrain_{mode}.csv")
-    df.to_csv(output_filename, index=False, encoding='utf-8')
-    logger.info(f"Evaluation results saved to: {output_filename}")
-            
     return accuracy
 
 @torch.no_grad()
-def generate_mmr_trajectories(query_loader: DataLoader,corpus_data: List[Dict[str, str]],corpus_embeddings: torch.Tensor,embedding_model: EmbeddingModel) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[Dict]]:
-
-    logger.info("--- Generating MMR Expert Trajectories ---")
-
-    original_to_new_corpus_map = {
-        item['corpus_index']: new_idx 
-        for new_idx, item in enumerate(corpus_data)
-        if 'corpus_index' in item
-    }
+def generate_best_lambda_dataset(
+    query_loader: DataLoader,
+    corpus_data: List[Dict[str, str]],
+    corpus_embeddings: torch.Tensor,
+    embedding_model: EmbeddingModel,
+    llm_wrapper: LLMWrapper,
+    num_candidates: int = 10  # 每个 Query 尝试多少个随机 Lambda
+) -> TensorDataset:
+    """
+    核心逻辑：对于每个 Query，随机尝试 num_candidates 个 Lambda，
+    计算它们对应的 MMR 检索结果在 LLM 上的 Loss，
+    选取 Loss 最小的 Lambda 作为该 Query 的监督学习标签。
+    """
+    logger.info(f"--- Generating Optimal Lambda Dataset (Best-of-{num_candidates} Search) ---")
 
     all_query_embs = []
-    all_expert_actions = []
-    all_selected_embs = []
-    all_query_data = []
+    all_best_actions = [] # 存储最佳 Lambda 的索引 (0-20)
     
-    for query_batch_list in tqdm(query_loader, desc="Generating MMR data"):
-        batch_size = len(query_batch_list)
-
+    for query_batch_list in tqdm(query_loader, desc="Searching optimal lambdas"):
+        real_batch_size = len(query_batch_list)
+        
         query_texts = [item['query'] for item in query_batch_list]
-        query_embs = embedding_model.encode(query_texts) 
-        all_query_embs.append(query_embs)
-        all_query_data.extend(query_batch_list)
-
-        batch_actions = torch.zeros((batch_size, config.NUM_EXAMPLES), dtype=torch.long, device=utils.device)
-        batch_selected_embs = torch.zeros((batch_size, config.NUM_EXAMPLES, embedding_model.dim), device=utils.device)
-
-        relevance_scores = torch.matmul(query_embs, corpus_embeddings.T)
-        selected_mask = torch.zeros_like(relevance_scores, dtype=torch.bool)
-
-        query_indices_to_mask = []
-        for i, item in enumerate(query_batch_list):
-            if 'corpus_index' in item:
-                original_idx = item['corpus_index']
-         
-                if original_idx in original_to_new_corpus_map:
-                    new_corpus_idx = original_to_new_corpus_map[original_idx]
-                    query_indices_to_mask.append((i, new_corpus_idx))
-
-        if query_indices_to_mask:
-            batch_indices = torch.tensor([idx[0] for idx in query_indices_to_mask], device=utils.device)
-            corpus_indices = torch.tensor([idx[1] for idx in query_indices_to_mask], device=utils.device)
-            selected_mask[batch_indices, corpus_indices] = True  
-
+        query_embs = embedding_model.encode(query_texts) # (B, D)
+        
+        # 1. 扩展 Query: (B, D) -> (B * K, D)
+        # 这样我们可以一次性处理所有候选 Lambda
+        query_embs_expanded = query_embs.repeat_interleave(num_candidates, dim=0)
+        
+        # 2. 随机生成 Lambda 索引 (0-20)
+        # (B * K,)
+        rand_actions = torch.randint(0, 21, (real_batch_size * num_candidates,), device=utils.device)
+        
+        # 转换为实际 Lambda 值 (0.00 - 1.00)
+        lambda_vals = (rand_actions.float() * 0.05).unsqueeze(1) # (B*K, 1)
+        
+        # 3. 执行并行 MMR
+        eff_batch_size = real_batch_size * num_candidates
+        
+        # 临时存储检索结果
+        batch_selected_indices = torch.zeros((eff_batch_size, config.NUM_EXAMPLES), dtype=torch.long, device=utils.device)
+        # 为了节省显存，这里我们不存储所有 step 的 embedding，只存 indices 和 当前 step 的 embedding
+        batch_selected_embs_current_step = torch.zeros((eff_batch_size, config.NUM_EXAMPLES, embedding_model.dim), device=utils.device)
+        
+        sim_scores = torch.matmul(query_embs_expanded, corpus_embeddings.T) # (B*K, CorpusSize)
+        relevance_scores = sim_scores
+        selected_mask = torch.zeros_like(sim_scores, dtype=torch.bool)
+        
+        # 处理 Self-selection mask (如果是训练集，需要屏蔽自己)
+        # 这里为了简化，假设 corpus 是全集，如果 query 在 corpus 里，最好屏蔽掉。
+        # 考虑到效率，这里暂时略过严格的 self-masking，或者假设 pretrain query 不直接等于 corpus index
+        
         for t in range(config.NUM_EXAMPLES):
             if t == 0:
                 step_scores = relevance_scores
             else:
-                selected_embs_so_far = batch_selected_embs[:, :t, :]
-                corpus_expanded = corpus_embeddings.unsqueeze(0).expand(batch_size, -1, -1)
-                sim_to_selected = torch.bmm(
-                    corpus_expanded, 
-                    selected_embs_so_far.transpose(1, 2)
-                )
-
-                diversity_penalty, _ = torch.max(sim_to_selected, dim=2)
-
-                step_scores = (config.MMR_LAMBDA * relevance_scores) - \
-                              ((1 - config.MMR_LAMBDA) * diversity_penalty)
+                # 计算多样性惩罚
+                # 优化内存：使用 matmul 而不是 expand
+                # selected_embs_so_far: (B*K, t, D)
+                selected_embs_so_far = batch_selected_embs_current_step[:, :t, :]
+                
+                # (B*K, t, D) @ (D, C) -> (B*K, t, C)
+                sim_to_selected = torch.matmul(selected_embs_so_far, corpus_embeddings.T)
+                diversity_penalty, _ = torch.max(sim_to_selected, dim=1) # (B*K, C)
+                
+                step_scores = (lambda_vals * relevance_scores) - \
+                              ((1 - lambda_vals) * diversity_penalty)
 
             step_scores.masked_fill_(selected_mask, -torch.inf)
-
-            current_action = torch.argmax(step_scores, dim=1)
-
-            batch_actions[:, t] = current_action
-            current_embs = corpus_embeddings[current_action] # (B, E)
-            batch_selected_embs[:, t, :] = current_embs
-
+            current_action = torch.argmax(step_scores, dim=1) # (B*K,)
+            
+            batch_selected_indices[:, t] = current_action
+            batch_selected_embs_current_step[:, t, :] = corpus_embeddings[current_action]
             selected_mask.scatter_(dim=1, index=current_action.unsqueeze(1), value=True)
             
-        all_expert_actions.append(batch_actions)
-        all_selected_embs.append(batch_selected_embs)
+        # 4. 构建 Prompt 并计算 Loss
+        prompts = []
+        targets = []
+        
+        for i in range(eff_batch_size):
+            # 找到对应的原始 query
+            orig_idx = i // num_candidates
+            query_data = query_batch_list[orig_idx]
+            
+            selected_indices = batch_selected_indices[i].cpu().tolist()
+            example_data = [corpus_data[idx] for idx in selected_indices]
+            
+            prompt_str = llm_wrapper.build_chat_prompt(
+                system_prompt=config.SYSTEM_PROMPT,
+                examples=example_data,
+                query=query_data['query'],
+                strategy=config.PROMPT_STRATEGY
+            )
+            prompts.append(prompt_str)
+            targets.append(query_data['answer'])
+            
+        # 获取 Loss (B*K,)
+        # 注意：这里我们使用 no_grad，因为我们只是为了产生数据，不训练 LLM
+        per_sample_loss = llm_wrapper.get_batch_loss(prompts, targets)
+        
+        # 5. 寻找每个 Query 的最佳 Lambda
+        # Reshape: (B, K)
+        per_sample_loss = per_sample_loss.view(real_batch_size, num_candidates)
+        rand_actions = rand_actions.view(real_batch_size, num_candidates)
+        
+        # 找到最小 Loss 的索引 (0..K-1)
+        min_loss_values, min_loss_indices = torch.min(per_sample_loss, dim=1) # (B,)
+        
+        # 提取对应的最佳 Action (0..20)
+        # gather dim=1
+        best_actions_batch = rand_actions.gather(1, min_loss_indices.unsqueeze(1)).squeeze(1) # (B,)
+        
+        # 收集数据
+        all_query_embs.append(query_embs.cpu())
+        all_best_actions.append(best_actions_batch.cpu())
         
     all_query_embs = torch.cat(all_query_embs, dim=0)
-    all_expert_actions = torch.cat(all_expert_actions, dim=0)
-    all_selected_embs = torch.cat(all_selected_embs, dim=0)
+    all_best_actions = torch.cat(all_best_actions, dim=0)
     
-    logger.info(f"Generated {all_query_embs.shape[0]} MMR trajectories.")
-    return all_query_embs, all_expert_actions, all_selected_embs, all_query_data
-
-@torch.no_grad()
-def compute_expert_returns(query_data: List[Dict[str,str]],
-                           expert_actions: torch.Tensor,
-                           llm_wrapper: LLMWrapper,
-                           reward_computer: RewardComputer,
-                           corpus_data: List[Dict[str, str]],
-                           batch_size: int,
-                           embedding_dim: int ) -> torch.Tensor:
-
-    logger.info("--- Computing Expert Returns for MMR Trajectories ---")
+    logger.info(f"Generated Dataset: {len(all_query_embs)} samples.")
+    logger.info(f"Best Action Distribution: \n{pd.Series(all_best_actions.numpy()).value_counts().sort_index()}")
     
-    all_returns = []
-    
-    num_queries = len(query_data)
-    num_actions = expert_actions.shape[0]
-    num_total = min(num_queries, num_actions)
-
-    for i in tqdm(range(0, num_total, batch_size), desc="Computing expert returns"):
-
-        b_queries = query_data[i : i + batch_size]
-        b_actions = expert_actions[i : i + batch_size]
-        b_size_current = b_actions.shape[0]
-
-        buffer = RolloutBuffer(
-            num_steps=config.NUM_EXAMPLES,
-            batch_size=b_size_current,
-            embedding_dim=embedding_dim, 
-            device=utils.device
-        )
-        buffer.log_probs = None
-        buffer.values = None 
-        buffer.queries = b_queries
-        buffer.actions = b_actions
-        
-        for j in range(b_size_current):
-            actions_list = b_actions[j].tolist()
-            buffer.selected_examples_text[j] = [corpus_data[idx] for idx in actions_list]
-        
-        buffer = reward_computer.compute_rewards_and_advantages(
-            buffer=buffer,
-            llm_wrapper=llm_wrapper,
-            embedding_model=None, 
-            corpus_embeddings=None
-        )
-        
-        all_returns.append(buffer.returns)
-        
-    return torch.cat(all_returns, dim=0)
+    return TensorDataset(all_query_embs, all_best_actions)
 
 def pretrain_agent(agent: PolicyNetwork,
                    optimizer: optim.Optimizer,
                    pretrain_dataset: TensorDataset,
                    device: torch.device):
     
-    logger.info(f"--- Starting Supervised Pre-training ---")
-    logger.info(f"Target Actor Loss: {config.PRETRAIN_LOSS_THRESHOLD}")
-    logger.info(f"Max Epochs: {config.PRETRAIN_MAX_EPOCHS}")
+    logger.info(f"--- Starting Supervised Pre-training (Classification) ---")
+    logger.info(f"Target Loss: {config.PRETRAIN_LOSS_THRESHOLD}")
     
     pretrain_loader = DataLoader(
         pretrain_dataset,
@@ -323,71 +246,62 @@ def pretrain_agent(agent: PolicyNetwork,
         shuffle=True
     )
     
-    crit_loss_fn = torch.nn.MSELoss()
+    # 既然 Action 是离散的类别 (0-20)，我们使用 CrossEntropyLoss
+    crit_loss_fn = torch.nn.CrossEntropyLoss()
     
     epoch = 0
-    current_actor_loss = float('inf')
     
     while epoch < config.PRETRAIN_MAX_EPOCHS:
         epoch += 1
         agent.train() 
         
-        total_actor_loss = 0.0
-        total_critic_loss = 0.0
+        total_loss = 0.0
+        correct_preds = 0
+        total_preds = 0
         
         pbar = tqdm(pretrain_loader, desc=f"Pre-train Epoch {epoch}/{config.PRETRAIN_MAX_EPOCHS}")
         
         for batch in pbar:
-            query_embs, expert_actions, expert_selected_embs, expert_returns = batch
+            query_embs, target_actions = batch
 
             query_embs = query_embs.to(device)
-            expert_actions = expert_actions.to(device)
-            expert_selected_embs = expert_selected_embs.to(device)
-            expert_returns = expert_returns.to(device)
+            target_actions = target_actions.to(device) # (B,)
 
-            _, new_values, _, all_logits = agent.forward(
-                query_embeddings=query_embs,
-                selected_example_embeddings=expert_selected_embs,
-                selected_actions=expert_actions,
-                corpus_embeddings=corpus_embeddings 
-            )
-
-            logits_flat = all_logits.view(-1, corpus_embeddings.shape[0])
-            actions_flat = expert_actions.view(-1)
+            # 前向传播，不需要传入 actions，我们想要 logits
+            # forward 返回: actions, log_probs, values, entropy
+            # 我们需要修改 forward 或者使用内部的 actor_head
+            # 但 standard forward 计算了 dist，我们可以直接获取 logits 吗？
+            # 让我们查看 PolicyNetwork 代码，forward 中 logits 是局部变量。
+            # 为了方便，我们可以直接调用 agent.feature_net 和 agent.actor_head
             
-            actor_loss = F.cross_entropy(logits_flat, actions_flat)
-            critic_loss = crit_loss_fn(new_values, expert_returns)
+            features = agent.feature_net(query_embs)
+            logits = agent.actor_head(features) # (B, 21)
             
-            total_loss = actor_loss + (critic_loss * config.V_LOSS_COEF)
+            loss = crit_loss_fn(logits, target_actions)
 
             optimizer.zero_grad()
-            total_loss.backward()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(agent.parameters(), config.GRAD_CLIP_NORM)
             optimizer.step()
             
-            total_actor_loss += actor_loss.item()
-            total_critic_loss += critic_loss.item()
+            total_loss += loss.item()
+            
+            # 计算准确率仅供参考
+            preds = torch.argmax(logits, dim=1)
+            correct_preds += (preds == target_actions).sum().item()
+            total_preds += target_actions.size(0)
             
             pbar.set_postfix({
-                "actor_loss(CE)": f"{actor_loss.item():.4f}",
-                "critic_loss(MSE)": f"{critic_loss.item():.4f}"
+                "loss": f"{loss.item():.4f}",
+                "acc": f"{correct_preds/total_preds:.2%}"
             })
             
-        avg_actor_loss = total_actor_loss / len(pretrain_loader)
-        avg_critic_loss = total_critic_loss / len(pretrain_loader)
-        logger.info(f"Pre-train Epoch {epoch} finished. "
-                    f"Avg Actor Loss: {avg_actor_loss:.4f}, "
-                    f"Avg Critic Loss: {avg_critic_loss:.4f}")
+        avg_loss = total_loss / len(pretrain_loader)
+        logger.info(f"Epoch {epoch} finished. Avg Loss: {avg_loss:.4f}, Acc: {correct_preds/total_preds:.2%}")
         
-        if avg_actor_loss < config.PRETRAIN_LOSS_THRESHOLD:
-            logger.info(f"Actor loss {avg_actor_loss:.4f} is below threshold {config.PRETRAIN_LOSS_THRESHOLD}.")
-            logger.info("Stopping pre-training.")
+        if avg_loss < config.PRETRAIN_LOSS_THRESHOLD:
+            logger.info("Loss threshold reached. Stopping pre-training.")
             break
-    
-    if epoch == config.PRETRAIN_MAX_EPOCHS and avg_actor_loss >= config.PRETRAIN_LOSS_THRESHOLD:
-        logger.warning(f"Reached max pre-training epochs ({config.PRETRAIN_MAX_EPOCHS}) without reaching loss threshold.")
-        logger.warning(f"Final actor loss: {avg_actor_loss:.4f} (Threshold: {config.PRETRAIN_LOSS_THRESHOLD})")
-
 
 corpus_embeddings = None
 
@@ -405,97 +319,62 @@ def main():
     llm_wrapper = LLMWrapper(
         model_name=config.LLM_MODEL_NAME, 
     )
+    
+    # 使用新的 MLP 结构初始化 Policy
     agent = PolicyNetwork(
         embedding_dim=embedding_model.dim,
         hidden_dim=config.AGENT_HIDDEN_DIM,
-        rnn_type=config.AGENT_RNN_TYPE
+        dropout=config.AGENT_DROPOUT
     ).to(device)
     
     corpus_data, corpus_embeddings_cpu = dataloader.get_corpus() 
     corpus_embeddings = corpus_embeddings_cpu.to(device)
-    logger.info(f"Corpus loaded. Size: {len(corpus_data)}, Embeddings shape: {corpus_embeddings.shape}")
 
-    logger.info("Loading 'dev' split for MMR evaluation...")
+    # 1. 准备数据加载器
+    # 我们可以只用一部分数据来做这个 Search，或者全部
+    pretrain_query_loader = dataloader.get_dataloader(
+        split='train', 
+        batch_size=config.BATCH_SIZE, 
+        shuffle=True, # Shuffle to get random mix
+        nums=config.TRAIN_NUMS # 可以限制数量加快速度
+    )
+    
+    # 2. 生成最佳 Lambda 数据集 (The "Loss-driven" Dataset)
+    # 每个 Query 尝试 5-10 个随机 Lambda，取最好的
+    best_lambda_dataset = generate_best_lambda_dataset(
+        query_loader=pretrain_query_loader,
+        corpus_data=corpus_data,
+        corpus_embeddings=corpus_embeddings,
+        embedding_model=embedding_model,
+        llm_wrapper=llm_wrapper,
+        num_candidates=10  # 尝试 10 个随机值
+    )
+
+    # 3. 开始监督预训练
+    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR)
+
+    pretrain_agent(
+        agent=agent,
+        optimizer=optimizer,
+        pretrain_dataset=best_lambda_dataset,
+        device=device 
+    )
+
+    # 4. 评估预训练后的模型
+    logger.info("--- Initializing Sampler for Evaluation ---")
+    sampler = EpisodeSampler(
+        policy_network=agent,
+        embedding_model=embedding_model,
+        num_examples=config.NUM_EXAMPLES
+    )
+    
     val_loader = dataloader.get_dataloader(
         split='dev',
         batch_size=config.BATCH_SIZE_VAL,
         shuffle=False 
     )
 
-    logger.info("--- Running MMR Expert Baseline Evaluation ---")
-    run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        prompt_strategy=config.PROMPT_STRATEGY, 
-        mode='mmr',
-        embedding_model=embedding_model
-    )
-    logger.info("--- MMR Expert Baseline Evaluation Finished ---")
-
-    logger.info("Clearing CUDA cache after MMR evaluation to free VRAM...")
-    torch.cuda.empty_cache()
-
-    pretrain_query_loader = dataloader.get_dataloader(
-        split='train', 
-        batch_size=config.BATCH_SIZE, 
-        shuffle=False
-    )
-    
-    query_embs, expert_actions, expert_selected_embs, query_data_list = generate_mmr_trajectories(
-        query_loader=pretrain_query_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        embedding_model=embedding_model
-    )
-
-    reward_computer = RewardComputer(
-        gamma=config.REWARD_GAMMA,
-        lambda_=config.REWARD_LAMBDA,
-        query_sim_weight=config.QUERY_SIM_WEIGHT,
-        sample_sim_weight=config.SAMPLE_SIM_WEIGHT,
-        final_loss_weight=config.FINAL_LOSS_WEIGHT,
-        system_prompt=config.SYSTEM_PROMPT,
-        prompt_strategy=config.PROMPT_STRATEGY
-    )
-    
-    expert_returns = compute_expert_returns(
-        query_data=query_data_list,
-        expert_actions=expert_actions,
-        llm_wrapper=llm_wrapper,
-        reward_computer=reward_computer,
-        corpus_data=corpus_data,
-        batch_size=config.BATCH_SIZE,
-        embedding_dim=embedding_model.dim
-    )
-
-    pretrain_dataset = TensorDataset(
-        query_embs.cpu(), 
-        expert_actions.cpu(), 
-        expert_selected_embs.cpu(), 
-        expert_returns.cpu()
-    )
-    
-    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR)
-
-    pretrain_agent(
-        agent=agent,
-        optimizer=optimizer,
-        pretrain_dataset=pretrain_dataset,
-        device=device 
-    )
-
-    logger.info("--- Initializing Sampler for Policy Network Evaluation ---")
-    sampler = EpisodeSampler(
-        policy_network=agent,
-        embedding_model=embedding_model,
-        num_examples=config.NUM_EXAMPLES
-    )
-
-    logger.info("--- Running Evaluation on Pre-trained Policy Network ---")
+    logger.info("--- Running Evaluation on Pre-trained Policy ---")
     run_evaluation(
         llm_wrapper=llm_wrapper,
         val_loader=val_loader,      
@@ -508,12 +387,12 @@ def main():
         sampler=sampler, 
         embedding_model=embedding_model 
     )
-    logger.info("--- Policy Network Evaluation Finished ---")
 
     os.makedirs("checkpoints", exist_ok=True)
-    torch.save(agent.state_dict(), config.PRETRAINED_MODEL_PATH)
-    logger.info(f"--- MMR Pre-training Finished ---")
-    logger.info(f"Pre-trained model saved to: {config.PRETRAINED_MODEL_PATH}")
+    save_path = config.PRETRAINED_MODEL_PATH
+    torch.save(agent.state_dict(), save_path)
+    logger.info(f"--- Pre-training Finished ---")
+    logger.info(f"Pre-trained model saved to: {save_path}")
 
 
 if __name__ == "__main__":

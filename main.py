@@ -16,6 +16,7 @@ from models.policy_network import PolicyNetwork
 from engine.sampler import EpisodeSampler, RolloutBuffer 
 from engine.reward_computer import RewardComputer
 from trainer.ppo_trainer import PPOTrainer
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 logger = logging.getLogger(__name__)
 
@@ -27,22 +28,16 @@ def run_evaluation(
     corpus_embeddings: torch.Tensor,
     check_correct_fn: callable,
     system_prompt: str,
-    prompt_strategy: str,
-    epoch: str, 
+    epoch: int, 
     mode: str,
     sampler: Optional[EpisodeSampler] = None, 
     embedding_model: Optional[EmbeddingModel] = None, 
-    num_examples_knn: int = 4
+    num_examples: int = 4,
+    mmr_baseline_lambda: float = 0.7
 ) -> float:
     
     logger.info(f"Starting evaluation (Mode: {mode.upper()}) for Epoch {epoch}...")
-    
-    if mode == 'policy' and sampler is None:
-        raise ValueError("Sampler must be provided for 'policy' mode evaluation.")
-    if mode == 'knn' and (embedding_model is None or num_examples_knn is None):
-        raise ValueError("EmbeddingModel and num_examples_knn must be provided for 'knn' mode evaluation.")
-
-    if mode == 'policy':
+    if mode =="policy":
         sampler.policy_network.eval() 
     
     total_correct = 0
@@ -58,6 +53,7 @@ def run_evaluation(
         batch_size = len(query_batch_list)
         
         if mode == 'policy':
+
             buffer = sampler.collect_episodes(
                 query_batch=query_batch_list,
                 corpus=corpus_data,
@@ -65,30 +61,43 @@ def run_evaluation(
             )
         else:
 
-            buffer = RolloutBuffer(num_examples_knn, batch_size, embedding_model.dim, utils.device)
-            buffer.log_probs = None 
-            buffer.values = None
+            buffer = RolloutBuffer(batch_size=batch_size, device=utils.device)
+            buffer.queries = query_batch_list
             
             query_texts = [item['query'] for item in query_batch_list]
-            buffer.queries = query_batch_list
             query_embs = embedding_model.encode(query_texts)
 
-            sim_scores = torch.matmul(query_embs, corpus_embeddings.T)
-            
-            _, top_k_indices = torch.topk(sim_scores, k=num_examples_knn, dim=1)
-            
-            for t in range(num_examples_knn):
-                actions = top_k_indices[:, t] # (B,)
-                selected_example_embeddings = corpus_embeddings[actions]
-                selected_example_texts = [corpus_data[idx.item()] for idx in actions]
-                
-                buffer.add_step_data(
-                    step=t,
-                    actions=actions,
-                    example_embeddings=selected_example_embeddings,
-                    example_texts=selected_example_texts
+            batch_selected_embs = torch.zeros((batch_size, num_examples, embedding_model.dim), device=utils.device)
+            batch_selected_indices = torch.zeros((batch_size, num_examples), dtype=torch.long, device=utils.device)
 
-                )
+            sim_scores = torch.matmul(query_embs, corpus_embeddings.T) # (B, Corpus)
+            relevance_scores = sim_scores
+            selected_mask = torch.zeros_like(sim_scores, dtype=torch.bool)
+
+            for t in range(num_examples):
+                if t == 0:
+                    step_scores = relevance_scores
+                else:
+                    selected_embs_so_far = batch_selected_embs[:, :t, :]
+                    corpus_expanded = corpus_embeddings.unsqueeze(0).expand(batch_size, -1, -1)
+                    sim_to_selected = torch.bmm(corpus_expanded, selected_embs_so_far.transpose(1, 2))
+                    diversity_penalty, _ = torch.max(sim_to_selected, dim=2)
+
+                    step_scores = (mmr_baseline_lambda * relevance_scores) - \
+                                  ((1 - mmr_baseline_lambda) * diversity_penalty)
+
+                step_scores.masked_fill_(selected_mask, -torch.inf)
+
+                current_action = torch.argmax(step_scores, dim=1)
+
+                current_embs = corpus_embeddings[current_action]
+                batch_selected_indices[:, t] = current_action
+                batch_selected_embs[:, t, :] = current_embs
+                selected_mask.scatter_(dim=1, index=current_action.unsqueeze(1), value=True)
+
+            for i in range(batch_size):
+                indices = batch_selected_indices[i].cpu().tolist()
+                buffer.selected_examples_text[i] = [corpus_data[idx] for idx in indices]
 
         prompts = []
         targets = []
@@ -100,7 +109,6 @@ def run_evaluation(
                 system_prompt=system_prompt,
                 examples=example_data,
                 query=query_data['query'],
-                strategy=prompt_strategy
             )
             prompts.append(prompt_str)
             targets.append(query_data['answer'])
@@ -159,8 +167,8 @@ def run_evaluation(
         "is_correct": all_correct
     })
 
-    os.makedirs("outputs", exist_ok=True) 
-    output_filename = f"outputs/val_results_{config.RUN_NAME}_epoch_{epoch}_{mode}.csv"
+    os.makedirs(f"results/lambda_icl_qwen3_0.6b/{config.RUN_NAME}", exist_ok=True) 
+    output_filename = f"results/lambda_icl_qwen3_0.6b/{config.RUN_NAME}/val_{epoch}.csv"
     df.to_csv(output_filename, index=False, encoding='utf-8')
     logger.info(f"Evaluation results saved to: {output_filename}")
 
@@ -176,11 +184,8 @@ def run_evaluation(
     return accuracy
 
 def train():
-
-    os.makedirs("outputs", exist_ok=True)
-    os.makedirs("checkpoints", exist_ok=True)
-    
-    utils.setup_logging(log_level="INFO", log_file=config.LOG_FILE)
+    os.makedirs(config.LOG_DIR, exist_ok=True)
+    utils.setup_logging(log_level="INFO", log_file=os.path.join(config.LOG_DIR, f"{config.RUN_NAME}.log"))
     utils.initialize_seeds(config.SEED)
     device = utils.device
     logger.info(f"Using device: {device}")
@@ -194,17 +199,8 @@ def train():
     agent = PolicyNetwork(
         embedding_dim=embedding_model.dim,
         hidden_dim=config.AGENT_HIDDEN_DIM,
-        rnn_type=config.AGENT_RNN_TYPE,
-        rnn_layers=config.AGENT_RNN_LAYERS,
-        dropout=config.AGENT_DROPOUT
+        dropout=config.AGENT_DROPOUT 
     ).to(device)
-
-    if os.path.exists(config.PRETRAINED_MODEL_PATH):
-        agent.load_state_dict(torch.load(config.PRETRAINED_MODEL_PATH, map_location=device))
-        logger.info(f"Successfully loaded pre-trained MMR weights from: {config.PRETRAINED_MODEL_PATH}")
-    else:
-        logger.warning(f"Pre-trained model not found at: {config.PRETRAINED_MODEL_PATH}")
-        logger.warning("Starting PPO training from random initialization.")
 
     logger.info("--- Loading Data ---")
     corpus_data, corpus_embeddings = dataloader.get_corpus()
@@ -213,7 +209,8 @@ def train():
     train_loader = dataloader.get_dataloader(
         split='train', 
         batch_size=config.BATCH_SIZE, 
-        shuffle=True
+        shuffle=True,
+        nums = config.TRAIN_NUMS
     )
     val_loader = dataloader.get_dataloader(
         split='dev',
@@ -230,11 +227,7 @@ def train():
     reward_computer = RewardComputer(
         gamma=config.REWARD_GAMMA,
         lambda_=config.REWARD_LAMBDA,
-        query_sim_weight=config.QUERY_SIM_WEIGHT,
-        sample_sim_weight=config.SAMPLE_SIM_WEIGHT,
-        final_loss_weight=config.FINAL_LOSS_WEIGHT,
         system_prompt=config.SYSTEM_PROMPT,
-        prompt_strategy=config.PROMPT_STRATEGY
     )
     optimizer = optim.AdamW(agent.parameters(), lr=config.LR)
     ppo_trainer = PPOTrainer(
@@ -251,19 +244,20 @@ def train():
 
     logger.info("--- Running Initial kNN Baseline Evaluation ---")
 
-    run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        prompt_strategy=config.PROMPT_STRATEGY,
-        epoch="0_knn_baseline", 
-        mode='knn',           
-        embedding_model=embedding_model,
-        num_examples_knn=config.NUM_EXAMPLES 
-    )
+    # run_evaluation(
+    #     llm_wrapper=llm_wrapper,
+    #     val_loader=val_loader,
+    #     corpus_data=corpus_data,
+    #     corpus_embeddings=corpus_embeddings,
+    #     check_correct_fn=dataloader.check_correct,
+    #     system_prompt=config.SYSTEM_PROMPT,
+    #     epoch=0, 
+    #     mode='mmr',           
+    #     sampler=None,
+    #     embedding_model=embedding_model,
+    #     num_examples=config.NUM_EXAMPLES,
+    #     mmr_baseline_lambda=0.7
+    # )
     
     logger.info("--- kNN Baseline Evaluation Finished ---")
     
@@ -293,14 +287,11 @@ def train():
 
             buffer = reward_computer.compute_rewards_and_advantages(
                 buffer=buffer,
-                llm_wrapper=llm_wrapper,
-                embedding_model=embedding_model,
-                corpus_embeddings=corpus_embeddings
+                llm_wrapper=llm_wrapper
             )
 
             log_dict = ppo_trainer.train_step(
-                buffer=buffer,
-                corpus_embeddings=corpus_embeddings
+                buffer=buffer
             )
             
             total_batches += 1
@@ -321,8 +312,7 @@ def train():
                 corpus_embeddings=corpus_embeddings,
                 check_correct_fn=dataloader.check_correct,
                 system_prompt=config.SYSTEM_PROMPT,
-                prompt_strategy=config.PROMPT_STRATEGY,
-                epoch=f"{epoch + 1}", 
+                epoch=epoch + 1, 
                 mode='policy',     
                 sampler=sampler        
             )
@@ -330,8 +320,6 @@ def train():
             if val_accuracy > best_val_accuracy:
                 best_val_accuracy = val_accuracy
                 logger.info(f"New best validation accuracy: {best_val_accuracy:.2f}%! Saving model...")
-                torch.save(agent.state_dict(), f"checkpoints/{config.RUN_NAME}_best.pt")
-            torch.save(agent.state_dict(), f"checkpoints/train/{config.RUN_NAME}_epoch_{epoch+1}.pt")
 
     logger.info("--- Final evaluation after all epochs ---")
     val_accuracy = run_evaluation(
@@ -341,8 +329,7 @@ def train():
         corpus_embeddings=corpus_embeddings,
         check_correct_fn=dataloader.check_correct,
         system_prompt=config.SYSTEM_PROMPT,
-        prompt_strategy=config.PROMPT_STRATEGY,
-        epoch = "final",
+        epoch = config.TOTAL_TRAIN_EPOCHS ,
         mode='policy',
         sampler=sampler 
     )

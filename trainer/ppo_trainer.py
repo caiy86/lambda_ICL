@@ -30,44 +30,50 @@ class PPOTrainer:
         self.grad_clip_norm = grad_clip_norm
 
     def train_step(self, buffer: RolloutBuffer) -> Dict[str, float]:
-        
-        query_embeddings = buffer.query_embeddings 
-        old_actions = buffer.actions[:, 0]     # Lambda Index
-        old_log_probs = buffer.log_probs[:, 0]
-        advantages = buffer.advantages[:, 0]
-        returns = buffer.returns[:, 0]
-
-        # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
-        all_actor_losses = []
-        all_value_losses = []
-        all_entropy_losses = []
-
-        for epoch in range(self.ppo_epochs):
             
-            _, new_log_probs, new_values, entropy = self.agent.forward(
-                query_embeddings=query_embeddings,
-                actions=old_actions 
-            )
+            query_embeddings = buffer.query_embeddings.clone() 
             
+            old_actions = buffer.actions[:, 0]     
+            old_log_probs = buffer.log_probs[:, 0]
+            advantages = buffer.advantages[:, 0]
+            returns = buffer.returns[:, 0]
 
-            ratio = torch.exp(new_log_probs - old_log_probs)
-            surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1.0 - self.ppo_clip_eps, 1.0 + self.ppo_clip_eps) * advantages
+            # Normalize advantages
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
             
-            actor_loss = -torch.min(surr1, surr2).mean()
-            value_loss = F.mse_loss(new_values, returns)
-            entropy_loss = -entropy.mean()
-            
-            total_loss = actor_loss + (value_loss * self.value_loss_coef) + (entropy_loss * self.entropy_bonus_coef)
+            all_actor_losses = []
+            all_value_losses = []
+            all_entropy_losses = []
 
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.agent.parameters(), self.grad_clip_norm)
-            self.optimizer.step()
+            for epoch in range(self.ppo_epochs):
+                
+                _, new_log_probs, new_values, entropy = self.agent.forward(
+                    query_embeddings=query_embeddings,
+                    actions=old_actions 
+                )
+                
+                ratio = torch.exp(new_log_probs - old_log_probs)
+                surr1 = ratio * advantages
+                surr2 = torch.clamp(ratio, 1.0 - self.ppo_clip_eps, 1.0 + self.ppo_clip_eps) * advantages
+                
+                actor_loss = -torch.min(surr1, surr2).mean()
+                value_loss = F.mse_loss(new_values, returns)
+                entropy_loss = -entropy.mean()
+                
+                total_loss = actor_loss + (value_loss * self.value_loss_coef) + (entropy_loss * self.entropy_bonus_coef)
 
+                self.optimizer.zero_grad()
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.agent.parameters(), self.grad_clip_norm)
+                self.optimizer.step()
+                
+                all_actor_losses.append(actor_loss.item())
+                all_value_losses.append(value_loss.item())
+                all_entropy_losses.append(entropy_loss.item())
 
-        return { ... } 
-
- 
+            return {
+                "actor_loss": sum(all_actor_losses) / len(all_actor_losses),
+                "value_loss": sum(all_value_losses) / len(all_value_losses),
+                "entropy_loss": sum(all_entropy_losses) / len(all_entropy_losses)
+            }
+    

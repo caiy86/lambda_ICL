@@ -1,4 +1,3 @@
-from config.pretrain_config import PRETRAIN_LR
 from utils import get_run_name
 
 PROJECT_NAME = 'lambda_icl_qwen_0.6b'
@@ -6,6 +5,7 @@ RUN_NAME = get_run_name(PROJECT_NAME)
 
 LOG_DIR = f'logs/{PROJECT_NAME}'
 CACHE_DIR = f"cache/{PROJECT_NAME}"
+PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1128_1409.pt" 
 
 SEED = 42
 DATASET_NAME = 'mtop'
@@ -26,11 +26,12 @@ AGENT_DROPOUT = 0.1
 REWARD_GAMMA = 0.99
 REWARD_LAMBDA = 0.95
 
-LR = 1e-6
+LR = 5e-5
 PRETRAIN_LR = 1e-4
 PRETRAIN_LOSS_THRESHOLD = 0.5
+UPDATE_TIMESTEPS = 512
 
-PPO_EPOCHS = 4
+PPO_EPOCHS = 2
 PPO_CLIP_EPS = 0.2
 
 V_LOSS_COEF = 0.5

@@ -71,6 +71,14 @@ class EpisodeSampler:
         relevance_scores = sim_scores
         selected_mask = torch.zeros_like(sim_scores, dtype=torch.bool)
 
+        query_indices = [item.get('corpus_index', -1) for item in query_batch]
+        self_indices = torch.tensor(query_indices, device=self.device, dtype=torch.long)
+        
+        valid_mask = self_indices >= 0
+        if valid_mask.any():
+            batch_rows = torch.arange(batch_size, device=self.device)
+            selected_mask[batch_rows[valid_mask], self_indices[valid_mask]] = True
+            
         for t in range(self.num_examples):
             if t == 0:
                 step_scores = relevance_scores

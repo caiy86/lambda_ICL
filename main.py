@@ -183,6 +183,29 @@ def run_evaluation(
             
     return accuracy
 
+def merge_buffers(buffers: List[RolloutBuffer]) -> RolloutBuffer:
+    total_batch_size = sum(b.batch_size for b in buffers)
+    device = buffers[0].device
+
+    merged = RolloutBuffer(batch_size=total_batch_size, device=device)
+    
+    merged.query_embeddings = torch.cat([b.query_embeddings for b in buffers], dim=0)
+    merged.actions = torch.cat([b.actions for b in buffers], dim=0)
+    merged.log_probs = torch.cat([b.log_probs for b in buffers], dim=0)
+    merged.values = torch.cat([b.values for b in buffers], dim=0)
+    merged.rewards = torch.cat([b.rewards for b in buffers], dim=0)
+    merged.advantages = torch.cat([b.advantages for b in buffers], dim=0)
+    merged.returns = torch.cat([b.returns for b in buffers], dim=0)
+    merged.final_llm_loss = torch.cat([b.final_llm_loss for b in buffers], dim=0)
+    
+    merged.queries = []
+    merged.selected_examples_text = []
+    for b in buffers:
+        merged.queries.extend(b.queries)
+        merged.selected_examples_text.extend(b.selected_examples_text)
+        
+    return merged
+
 def train():
     os.makedirs(config.LOG_DIR, exist_ok=True)
     utils.setup_logging(log_level="INFO", log_file=os.path.join(config.LOG_DIR, f"{config.RUN_NAME}.log"))
@@ -202,6 +225,15 @@ def train():
         dropout=config.AGENT_DROPOUT 
     ).to(device)
 
+    if config.PRETRAINED_PATH and os.path.exists(config.PRETRAINED_PATH):
+        logger.info(f"Loading pretrained model from: {config.PRETRAINED_PATH}")
+        # 加载权重
+        state_dict = torch.load(config.PRETRAINED_PATH, map_location=device)
+        agent.load_state_dict(state_dict)
+        logger.info("Pretrained weights loaded successfully.")
+    else:
+        logger.warning(f"No pretrained model found at {config.PRETRAINED_PATH}, starting from scratch!")
+
     logger.info("--- Loading Data ---")
     corpus_data, corpus_embeddings = dataloader.get_corpus()
     logger.info(f"Corpus embeddings computed. Shape: {corpus_embeddings.shape}")
@@ -214,7 +246,7 @@ def train():
     )
     val_loader = dataloader.get_dataloader(
         split='dev',
-        batch_size=config.BATCH_SIZE_VAL,
+        batch_size=config.BATCH_SIZE,
         shuffle=False 
     )
     
@@ -242,28 +274,30 @@ def train():
 
     logger.info("--- Starting Training Loop ---")
 
-    logger.info("--- Running Initial kNN Baseline Evaluation ---")
+    logger.info("--- Running Initial MMR with λ=0.7 Baseline Evaluation ---")
 
-    run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        epoch=0, 
-        mode='mmr',           
-        sampler=None,
-        embedding_model=embedding_model,
-        num_examples=config.NUM_EXAMPLES,
-        mmr_baseline_lambda=0.7
-    )
+    # run_evaluation(
+    #     llm_wrapper=llm_wrapper,
+    #     val_loader=val_loader,
+    #     corpus_data=corpus_data,
+    #     corpus_embeddings=corpus_embeddings,
+    #     check_correct_fn=dataloader.check_correct,
+    #     system_prompt=config.SYSTEM_PROMPT,
+    #     epoch=0, 
+    #     mode='mmr',           
+    #     sampler=None,
+    #     embedding_model=embedding_model,
+    #     num_examples=config.NUM_EXAMPLES,
+    #     mmr_baseline_lambda=0.7
+    # )
     
-    logger.info("--- kNN Baseline Evaluation Finished ---")
+    logger.info("--- MMR Baseline Evaluation Finished ---")
     
     total_batches = 0
     best_val_accuracy = -1.0 
-    
+    current_buffers = []    
+    current_steps_count = 0   
+
     for epoch in range(config.TOTAL_TRAIN_EPOCHS):
         logger.info(f"Starting Epoch {epoch + 1}/{config.TOTAL_TRAIN_EPOCHS}")
 
@@ -289,6 +323,24 @@ def train():
                 buffer=buffer,
                 llm_wrapper=llm_wrapper
             )
+            current_buffers.append(buffer)
+            current_steps_count += len(buffer.queries) 
+            
+            if current_steps_count >= config.UPDATE_TIMESTEPS:
+
+                merged_buffer = merge_buffers(current_buffers)
+                log_dict = ppo_trainer.train_step(buffer=merged_buffer)
+                avg_llm_loss = merged_buffer.final_llm_loss.mean().item()
+                avg_reward = merged_buffer.rewards.mean().item()
+                current_buffers = []
+                current_steps_count = 0
+                total_batches += 1
+                pbar.set_postfix({
+                    "actor_loss": f"{log_dict['actor_loss']:.4f}",
+                    "val_loss": f"{log_dict['value_loss']:.4f}", 
+                    "rew": f"{avg_reward:.3f}",
+                    "step": total_batches
+                })
 
             log_dict = ppo_trainer.train_step(
                 buffer=buffer

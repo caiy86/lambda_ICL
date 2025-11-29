@@ -80,46 +80,9 @@ def get_corpus() -> Tuple[List[Dict[str, str]], torch.Tensor]:
     
     full_train_data, full_train_embeddings = _get_full_train_data_and_embeddings()
     
-    if not config.USE_CLUSTERED_CORPUS:
-        logger.warning(
-            f"USE_CLUSTERED_CORPUS=False. Using the *entire* training dataset "
-            f"({len(full_train_data)} samples) as corpus."
-        )
-        corpus_data = full_train_data
-        corpus_embeddings = full_train_embeddings
-        
-    else:
-        corpus_size_config = config.CORPUS_NUM_CLUSTERS * config.CORPUS_SIZE_PER_CLUSTER
-        logger.info(
-            f"USE_CLUSTERED_CORPUS=True. Running K-Means (K={config.CORPUS_NUM_CLUSTERS}) "
-            f"to sample {corpus_size_config} examples for corpus..."
-        )
-        
-        kmeans = MiniBatchKMeans(
-            n_clusters=config.CORPUS_NUM_CLUSTERS,
-            random_state=config.SEED,
-            batch_size=256,
-            n_init="auto"
-        )
-        cluster_labels = kmeans.fit_predict(full_train_embeddings.cpu().numpy())
-        
-        corpus_indices = []
-        rng = np.random.default_rng(config.SEED)
-        
-        for cluster_id in range(config.CORPUS_NUM_CLUSTERS):
-            indices_in_cluster = np.where(cluster_labels == cluster_id)[0]
-            
-            if len(indices_in_cluster) == 0:
-                logger.warning(f"K-Means Cluster {cluster_id} is empty! Skipping.")
-                continue
-            
-            num_to_sample = min(config.CORPUS_SIZE_PER_CLUSTER, len(indices_in_cluster))
-            sampled_indices = rng.choice(indices_in_cluster, num_to_sample, replace=False)
-            
-            corpus_indices.extend(sampled_indices)
+    corpus_data = full_train_data
+    corpus_embeddings = full_train_embeddings
 
-        corpus_data = [full_train_data[i] for i in corpus_indices]
-        corpus_embeddings = full_train_embeddings[corpus_indices]
     
     logger.info(f"Corpus created. Final size: {len(corpus_data)}")
     return corpus_data, corpus_embeddings.to(utils.device)

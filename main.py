@@ -260,19 +260,6 @@ def train():
         entropy_bonus_coef=config.E_BONUS_COEF, grad_clip_norm=config.GRAD_CLIP_NORM
     )
 
-
-    val_accuracy = run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        epoch=0, 
-        mode='policy',     
-        sampler=sampler        
-    ) 
-    print(val_accuracy)
     # --- Pretraining Evaluation with MMR Baseline ---
     logger.info("--- Running Pre-Training Evaluation (MMR Baseline) ---")
     mmr_val_accuracy = run_evaluation(

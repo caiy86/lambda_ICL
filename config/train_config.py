@@ -7,9 +7,10 @@ RUN_NAME = get_run_name(PROJECT_NAME)
 LOG_DIR = f'logs/{PROJECT_NAME}'
 CACHE_DIR = f"cache/{PROJECT_NAME}"
 # PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1128_1409.pt" 
-PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/1130_1324_best.pt" 
+# PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/1130_1324_best.pt" 
+PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1201_1445.pt"
 
-USE_WANDB = False
+USE_WANDB = True
 WANDB_PROJECT = "lambda-icl-ppo" 
 WANDB_ENTITY = None
 
@@ -21,6 +22,7 @@ MAX_GEN_TOKENS = 200
 
 TRAIN_NUMS = 5000
 PRETRAIN_NUMS = 1024
+PRETRAIN_SEED = 1
 
 
 LLM_MODEL_NAME = 'Qwen/Qwen3-0.6B'
@@ -38,8 +40,8 @@ SCALE_FACTOR = 0.1
 MMR_LAMBDA = 0.7
 
 LR = 1e-4
-PRETRAIN_LR = 1e-4
-PRETRAIN_LOSS_THRESHOLD = 0.5
+PRETRAIN_LR = 1e-3
+PRETRAIN_LOSS_THRESHOLD = 1.3
 UPDATE_TIMESTEPS = 512
 
 PPO_EPOCHS = 4

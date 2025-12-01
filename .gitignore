@@ -3,3 +3,6 @@ results/
 __pycache__/
 checkpoints/
 cache/
+test.ipynb
+record.md
+wandb/

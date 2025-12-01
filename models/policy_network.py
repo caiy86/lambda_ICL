@@ -49,7 +49,10 @@ class PolicyNetwork(nn.Module):
         dist = Categorical(logits=logits)
 
         if actions is None:
-            actions = dist.sample()
+            if self.training:
+                actions = dist.sample()
+            else:
+                actions = torch.argmax(logits, dim=-1)
             
         log_probs = dist.log_prob(actions)
         entropy = dist.entropy()

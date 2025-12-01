@@ -6,6 +6,8 @@ from tqdm import tqdm
 from typing import List, Dict,Optional
 import pandas as pd
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+from torch.optim.lr_scheduler import LinearLR
+import wandb
 
 from config import train_config as config 
 import utils
@@ -16,7 +18,7 @@ from models.policy_network import PolicyNetwork
 from engine.sampler import EpisodeSampler, RolloutBuffer 
 from engine.reward_computer import RewardComputer
 from trainer.ppo_trainer import PPOTrainer
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 logger = logging.getLogger(__name__)
 
@@ -209,109 +211,110 @@ def merge_buffers(buffers: List[RolloutBuffer]) -> RolloutBuffer:
 def train():
     os.makedirs(config.LOG_DIR, exist_ok=True)
     utils.setup_logging(log_level="INFO", log_file=os.path.join(config.LOG_DIR, f"{config.RUN_NAME}.log"))
-    # utils.initialize_seeds(config.SEED)
     device = utils.device
     logger.info(f"Using device: {device}")
     logger.info(f"Starting run: {config.RUN_NAME}")
 
+    # --- WandB Init ---
+    if config.USE_WANDB:
+        wandb.init(
+            project=config.WANDB_PROJECT,
+            entity=config.WANDB_ENTITY,
+            name=config.RUN_NAME,
+            config={k: getattr(config, k) for k in dir(config) if not k.startswith("__") and not callable(getattr(config, k))}
+        )
+
+    # --- Model Init ---
     logger.info("--- Initializing Models ---")
     embedding_model = EmbeddingModel(model_name=config.EMBEDDING_MODEL_NAME)
-    llm_wrapper = LLMWrapper(
-        model_name=config.LLM_MODEL_NAME, 
-    )
+    llm_wrapper = LLMWrapper(model_name=config.LLM_MODEL_NAME)
     agent = PolicyNetwork(
         embedding_dim=embedding_model.dim,
         hidden_dim=config.AGENT_HIDDEN_DIM,
         dropout=config.AGENT_DROPOUT 
     ).to(device)
 
+    # --- Optimizer & Scheduler ---
+    optimizer = optim.AdamW(agent.parameters(), lr=config.LR)
+    # 你的线性调度器
+    scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=config.TOTAL_TRAIN_EPOCHS)
+
     if config.PRETRAINED_PATH and os.path.exists(config.PRETRAINED_PATH):
         logger.info(f"Loading pretrained model from: {config.PRETRAINED_PATH}")
-        # 加载权重
         state_dict = torch.load(config.PRETRAINED_PATH, map_location=device)
         agent.load_state_dict(state_dict)
-        logger.info("Pretrained weights loaded successfully.")
     else:
         logger.warning(f"No pretrained model found at {config.PRETRAINED_PATH}, starting from scratch!")
 
     logger.info("--- Loading Data ---")
     corpus_data, corpus_embeddings = dataloader.get_corpus()
-    logger.info(f"Corpus embeddings computed. Shape: {corpus_embeddings.shape}")
     
-    train_loader = dataloader.get_dataloader(
-        split='train', 
-        batch_size=config.BATCH_SIZE, 
-        shuffle=True,
-        nums = config.TRAIN_NUMS
-    )
-    val_loader = dataloader.get_dataloader(
-        split='dev',
-        batch_size=config.BATCH_SIZE,
-        shuffle=False 
-    )
+    train_loader = dataloader.get_dataloader(split='train', batch_size=config.BATCH_SIZE, shuffle=True, nums=config.TRAIN_NUMS)
+    val_loader = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False)
     
-    logger.info("--- Initializing PPO Components ---")
-    sampler = EpisodeSampler(
-        policy_network=agent,
-        embedding_model=embedding_model,
-        num_examples=config.NUM_EXAMPLES
-    )
-    reward_computer = RewardComputer(
-        gamma=config.REWARD_GAMMA,
-        lambda_=config.REWARD_LAMBDA,
-        system_prompt=config.SYSTEM_PROMPT,
-    )
-    optimizer = optim.AdamW(agent.parameters(), lr=config.LR)
+    sampler = EpisodeSampler(policy_network=agent, embedding_model=embedding_model, num_examples=config.NUM_EXAMPLES)
+    reward_computer = RewardComputer(gamma=config.REWARD_GAMMA, lambda_=config.REWARD_LAMBDA, system_prompt=config.SYSTEM_PROMPT)
     ppo_trainer = PPOTrainer(
-        agent=agent,
-        optimizer=optimizer,
-        ppo_epochs=config.PPO_EPOCHS,
-        ppo_clip_eps=config.PPO_CLIP_EPS,
-        value_loss_coef=config.V_LOSS_COEF,
-        entropy_bonus_coef=config.E_BONUS_COEF,
-        grad_clip_norm=config.GRAD_CLIP_NORM
+        agent=agent, optimizer=optimizer, ppo_epochs=config.PPO_EPOCHS,
+        ppo_clip_eps=config.PPO_CLIP_EPS, value_loss_coef=config.V_LOSS_COEF,
+        entropy_bonus_coef=config.E_BONUS_COEF, grad_clip_norm=config.GRAD_CLIP_NORM
     )
+
+
+    val_accuracy = run_evaluation(
+        llm_wrapper=llm_wrapper,
+        val_loader=val_loader,
+        corpus_data=corpus_data,
+        corpus_embeddings=corpus_embeddings,
+        check_correct_fn=dataloader.check_correct,
+        system_prompt=config.SYSTEM_PROMPT,
+        epoch=0, 
+        mode='policy',     
+        sampler=sampler        
+    ) 
+    print(val_accuracy)
+    # --- Pretraining Evaluation with MMR Baseline ---
+    logger.info("--- Running Pre-Training Evaluation (MMR Baseline) ---")
+    mmr_val_accuracy = run_evaluation(
+        llm_wrapper=llm_wrapper,
+        val_loader=val_loader,
+        corpus_data=corpus_data,
+        corpus_embeddings=corpus_embeddings,
+        check_correct_fn=dataloader.check_correct,
+        system_prompt=config.SYSTEM_PROMPT,
+        epoch=0,
+        mode='mmr',
+        embedding_model=embedding_model,
+        num_examples=config.NUM_EXAMPLES,
+        mmr_baseline_lambda=getattr(config, "MMR_LAMBDA", 0.7),
+    )   
+    if config.USE_WANDB:
+        wandb.log({"val/mrr_baseline_accuracy": mmr_val_accuracy, "epoch": 0})
+    logger.info(f"MMR Baseline Validation Accuracy: {mmr_val_accuracy:.2f}%")
 
     logger.info("--- Starting Training Loop ---")
-
-    logger.info("--- Running Initial MMR with λ=0.7 Baseline Evaluation ---")
-
-    # run_evaluation(
-    #     llm_wrapper=llm_wrapper,
-    #     val_loader=val_loader,
-    #     corpus_data=corpus_data,
-    #     corpus_embeddings=corpus_embeddings,
-    #     check_correct_fn=dataloader.check_correct,
-    #     system_prompt=config.SYSTEM_PROMPT,
-    #     epoch=0, 
-    #     mode='mmr',           
-    #     sampler=None,
-    #     embedding_model=embedding_model,
-    #     num_examples=config.NUM_EXAMPLES,
-    #     mmr_baseline_lambda=0.7
-    # )
-    
-    logger.info("--- MMR Baseline Evaluation Finished ---")
     
     total_batches = 0
     best_val_accuracy = -1.0 
+    
     current_buffers = []    
     current_steps_count = 0   
 
     for epoch in range(config.TOTAL_TRAIN_EPOCHS):
         logger.info(f"Starting Epoch {epoch + 1}/{config.TOTAL_TRAIN_EPOCHS}")
-
         agent.train()
-        
+
+        epoch_stats = {
+            "actor_loss": 0.0, "value_loss": 0.0, "entropy": 0.0,
+            "approx_kl": 0.0, "reward": 0.0, "llm_loss": 0.0, "count": 0
+        }
+
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1} [Training]")
         
         for query_batch_list in pbar:
             if not isinstance(query_batch_list, list):
                  batch_size = len(query_batch_list['query'])
-                 query_batch_list = [
-                     {"query": query_batch_list['query'][i], "answer": query_batch_list['answer'][i]}
-                     for i in range(batch_size)
-                 ]
+                 query_batch_list = [{"query": query_batch_list['query'][i], "answer": query_batch_list['answer'][i]} for i in range(batch_size)]
 
             buffer = sampler.collect_episodes(
                 query_batch=query_batch_list,
@@ -321,79 +324,95 @@ def train():
 
             buffer = reward_computer.compute_rewards_and_advantages(
                 buffer=buffer,
-                llm_wrapper=llm_wrapper
+                llm_wrapper=llm_wrapper,
+                check_correct_fn=dataloader.check_correct,
             )
+            
             current_buffers.append(buffer)
             current_steps_count += len(buffer.queries) 
             
             if current_steps_count >= config.UPDATE_TIMESTEPS:
-
                 merged_buffer = merge_buffers(current_buffers)
+
                 log_dict = ppo_trainer.train_step(buffer=merged_buffer)
+                
                 avg_llm_loss = merged_buffer.final_llm_loss.mean().item()
                 avg_reward = merged_buffer.rewards.mean().item()
+                
+                epoch_stats["actor_loss"] += log_dict.get("actor_loss", 0)
+                epoch_stats["value_loss"] += log_dict.get("value_loss", 0)
+                epoch_stats["entropy"] += log_dict.get("entropy_loss", 0)
+                epoch_stats["approx_kl"] += log_dict.get("approx_kl", 0)
+                epoch_stats["reward"] += avg_reward
+                epoch_stats["llm_loss"] += avg_llm_loss
+                epoch_stats["count"] += 1
+                
+                total_batches += 1
+
+                if config.USE_WANDB:
+                    wandb.log({
+                        "train/step_actor_loss": log_dict.get("actor_loss", 0),
+                        "train/step_value_loss": log_dict.get("value_loss", 0),
+                        "train/step_reward": avg_reward,
+                        "train/step_kl": log_dict.get("approx_kl", 0),
+                        "train/lr": optimizer.param_groups[0]['lr'],
+                        "global_step": total_batches
+                    })
+
                 current_buffers = []
                 current_steps_count = 0
-                total_batches += 1
+                
+                run_avg_actor = epoch_stats["actor_loss"] / epoch_stats["count"]
+                run_avg_val = epoch_stats["value_loss"] / epoch_stats["count"]
+                run_avg_rew = epoch_stats["reward"] / epoch_stats["count"]
+                run_avg_kl = epoch_stats["approx_kl"] / epoch_stats["count"]
+                
                 pbar.set_postfix({
-                    "actor_loss": f"{log_dict['actor_loss']:.4f}",
-                    "val_loss": f"{log_dict['value_loss']:.4f}", 
-                    "rew": f"{avg_reward:.3f}",
-                    "step": total_batches
+                    "avg_act": f"{run_avg_actor:.3f}", # 平均 Actor Loss
+                    "avg_crt": f"{run_avg_val:.3f}",   # 平均 Critic Loss
+                    "avg_rew": f"{run_avg_rew:.3f}",   # 平均 Reward
+                    "avg_kl": f"{run_avg_kl:.4f}"      # 平均 KL
                 })
 
-            log_dict = ppo_trainer.train_step(
-                buffer=buffer
+        if epoch_stats["count"] > 0:
+            avg_stats = {k: v / epoch_stats["count"] for k, v in epoch_stats.items() if k != "count"}
+            logger.info(
+                f"Epoch {epoch+1} Summary | "
+                f"Avg Rew: {avg_stats['reward']:.4f} | "
+                f"Avg KL: {avg_stats['approx_kl']:.4f} | "
+                f"Avg ActLoss: {avg_stats['actor_loss']:.4f}"
             )
-            
-            total_batches += 1
-            avg_llm_loss = buffer.final_llm_loss.mean().item()
-            
-            pbar.set_postfix({
-                "actor_loss": f"{log_dict['actor_loss']:.4f}",
-                "value_loss": f"{log_dict['value_loss']:.4f}",
-                "avg_reward": f"{buffer.rewards.mean().item():.3f}",
-                "llm_loss": f"{avg_llm_loss:.3f}"
-            })
+            if config.USE_WANDB:
+                wandb.log({
+                    "epoch/avg_reward": avg_stats['reward'],
+                    "epoch/avg_kl": avg_stats['approx_kl'],
+                    "epoch/avg_actor_loss": avg_stats['actor_loss'],
+                    "epoch": epoch + 1
+                })
 
-        if (epoch + 1) % 10 == 0 or epoch == 0:
-            val_accuracy = run_evaluation(
-                llm_wrapper=llm_wrapper,
-                val_loader=val_loader,
-                corpus_data=corpus_data,
-                corpus_embeddings=corpus_embeddings,
-                check_correct_fn=dataloader.check_correct,
-                system_prompt=config.SYSTEM_PROMPT,
-                epoch=epoch + 1, 
-                mode='policy',     
-                sampler=sampler        
-            )
+        scheduler.step()
+        
+        val_accuracy = run_evaluation(
+            llm_wrapper=llm_wrapper,
+            val_loader=val_loader,
+            corpus_data=corpus_data,
+            corpus_embeddings=corpus_embeddings,
+            check_correct_fn=dataloader.check_correct,
+            system_prompt=config.SYSTEM_PROMPT,
+            epoch=epoch + 1, 
+            mode='policy',     
+            sampler=sampler        
+        )
+        if config.USE_WANDB:
+            wandb.log({"val/accuracy": val_accuracy, "epoch": epoch + 1})
 
-            if val_accuracy > best_val_accuracy:
-                best_val_accuracy = val_accuracy
-                logger.info(f"New best validation accuracy: {best_val_accuracy:.2f}%! Saving model...")
+        if val_accuracy > best_val_accuracy:
+            best_val_accuracy = val_accuracy
+            logger.info(f"New best validation accuracy: {best_val_accuracy:.2f}%! Saving model...")
+            torch.save(agent.state_dict(), f"cache/{config.PROJECT_NAME}/{config.RUN_NAME}_best.pt")
 
-    logger.info("--- Final evaluation after all epochs ---")
-    val_accuracy = run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        epoch = config.TOTAL_TRAIN_EPOCHS ,
-        mode='policy',
-        sampler=sampler 
-    )
-    logger.info(f"Final post-training evaluation accuracy: {val_accuracy:.2f}%")
-
-    if val_accuracy > best_val_accuracy:
-        best_val_accuracy = val_accuracy
-        logger.info(f"New best validation accuracy: {best_val_accuracy:.2f}%! Saving model...")
-        torch.save(agent.state_dict(), f"checkpoints/{config.RUN_NAME}_best.pt")
-
-    logger.info(f"--- Training Finished ---")
-    logger.info(f"Best validation accuracy: {best_val_accuracy:.2f}%")
+    if config.USE_WANDB:
+        wandb.finish()
 
 if __name__ == "__main__":
     try:

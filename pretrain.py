@@ -22,36 +22,31 @@ logger = logging.getLogger(__name__)
 
 @torch.no_grad()
 def run_evaluation(llm_wrapper: LLMWrapper,
-                   val_loader: torch.utils.data.DataLoader,
+                   val_loader: DataLoader, 
                    corpus_data: List[Dict[str, str]],
                    corpus_embeddings: torch.Tensor,
                    check_correct_fn: callable,
                    system_prompt: str,
-                   mode: str,
-                   sampler: Optional[EpisodeSampler] = None) -> float:
+                   sampler: EpisodeSampler,
+                   desc: str = "Eval") -> float:
     
-    logger.info(f"Starting evaluation (Mode: {mode})...")
-    if mode == 'policy':
-        if sampler is None:
-            raise ValueError("Sampler required for policy evaluation.")
-        sampler.policy_network.eval()
+    sampler.policy_network.eval()
     
     total_correct = 0
-    total_nll = 0.0 
     total_samples = 0
     
-    for query_batch_list in tqdm(val_loader, desc=f"Validating ({mode})"):
-        batch_size = len(query_batch_list)
+    for batch in tqdm(val_loader, desc=desc, leave=False):
+        curr_batch_size = len(batch)
         
         buffer = sampler.collect_episodes(
-            query_batch=query_batch_list,
+            query_batch=batch,
             corpus=corpus_data,
             corpus_embeddings=corpus_embeddings
         )
         
         prompts = []
         targets = []
-        for i in range(batch_size):
+        for i in range(curr_batch_size):
             query_data = buffer.queries[i]
             example_data = buffer.selected_examples_text[i]
             
@@ -63,34 +58,21 @@ def run_evaluation(llm_wrapper: LLMWrapper,
             prompts.append(prompt_str)
             targets.append(query_data['answer'])
 
-        generated_texts, generated_nlls = llm_wrapper.generate_for_evaluation(
+        generated_texts, _ = llm_wrapper.generate_for_evaluation(
             prompts, max_new_tokens=config.MAX_GEN_TOKENS
         )
         
-        nlls_list = generated_nlls.cpu().tolist() if isinstance(generated_nlls, torch.Tensor) else generated_nlls
-
-        for i in range(batch_size):
+        for i in range(curr_batch_size):
             if check_correct_fn(target_answer=targets[i], pred_text=generated_texts[i]):
                 total_correct += 1
-            total_nll += nlls_list[i] 
         
-        total_samples += batch_size
+        total_samples += curr_batch_size
 
     accuracy = (total_correct / total_samples) * 100 if total_samples > 0 else 0.0
-    avg_nll = total_nll / total_samples if total_samples > 0 else float('inf')
-    
-    logger.info(f"Eval Finished. Acc: {accuracy:.2f}%, Avg NLL: {avg_nll:.4f}")
     return accuracy
 
 @torch.no_grad()
-def generate_oracle_dataset_with_value(
-    query_loader: DataLoader,
-    corpus_data: List[Dict[str, str]],
-    corpus_embeddings: torch.Tensor,
-    embedding_model: EmbeddingModel,
-    llm_wrapper: LLMWrapper,
-    check_correct_fn: callable
-) -> TensorDataset:
+def generate_data(query_loader: DataLoader,corpus_data: List[Dict[str, str]],corpus_embeddings: torch.Tensor,embedding_model: EmbeddingModel,llm_wrapper: LLMWrapper,check_correct_fn: callable) -> TensorDataset:
 
     logger.info(f"--- Generating Oracle Dataset (Grid Search & Value Estimation) ---")
     
@@ -118,7 +100,7 @@ def generate_oracle_dataset_with_value(
 
         correctness_matrix = torch.zeros((batch_size, len(candidate_indices)), dtype=torch.bool, device=utils.device)
 
-        for i, (lam_val, action_idx) in enumerate(zip(lambda_candidates, candidate_indices)):
+        for i, (lam_val, _) in enumerate(zip(lambda_candidates, candidate_indices)):
             lambda_tensor = torch.full((batch_size, 1), lam_val, device=utils.device)
             batch_selected_indices = torch.zeros((batch_size, config.NUM_EXAMPLES), dtype=torch.long, device=utils.device)
             batch_selected_embs = torch.zeros((batch_size, config.NUM_EXAMPLES, embedding_model.dim), device=utils.device)
@@ -223,14 +205,14 @@ def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, 
 
             features = agent.feature_net(query_embs)
             logits = agent.actor_head(features)
-            values = agent.value_head(features).squeeze(-1)
+            # values = agent.value_head(features).squeeze(-1)
 
             bce_loss_fn = torch.nn.BCEWithLogitsLoss(reduction='none')
             per_sample_bce_loss = bce_loss_fn(logits, target_dists)
             per_sample_actor_loss = per_sample_bce_loss.mean(dim=-1)
             actor_loss = (per_sample_actor_loss * actor_masks).sum() / (actor_masks.sum() + 1e-8)
-            value_loss = mse_loss_fn(values, value_targets)
-            loss = actor_loss + 0.5 * value_loss
+            # value_loss = mse_loss_fn(values, value_targets)
+            loss = actor_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -238,14 +220,10 @@ def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, 
             optimizer.step()
             
             total_loss += loss.item()
-            total_actor_loss += actor_loss.item()
-            total_value_loss += value_loss.item()
             
         avg_loss = total_loss / len(pretrain_loader)
-        avg_actor = total_actor_loss / len(pretrain_loader)
-        avg_value = total_value_loss / len(pretrain_loader)
         
-        logger.info(f"Epoch {epoch}: Total Loss={avg_loss:.4f} (Actor={avg_actor:.4f}, Value={avg_value:.4f})")
+        logger.info(f"Epoch {epoch}: Average Loss={avg_loss:.4f} ")
 
 def main():
 
@@ -268,7 +246,7 @@ def main():
     corpus_data, corpus_embeddings_cpu = dataloader.get_corpus() 
     corpus_embeddings = corpus_embeddings_cpu.to(device)
 
-    dataset_path = f"{config.CACHE_DIR}/pretrain_datasetv3.pt"
+    dataset_path = f"{config.CACHE_DIR}/pretrain_dataset.pt"
     if os.path.exists(dataset_path):
         logger.info(f"Loading existing dataset from {dataset_path}...")
         best_lambda_dataset = torch.load(dataset_path,weights_only=False)
@@ -279,7 +257,7 @@ def main():
             split='train',batch_size=config.BATCH_SIZE, shuffle=True, nums=config.PRETRAIN_NUMS,seed=config.PRETRAIN_SEED 
         )
         
-        best_lambda_dataset = generate_oracle_dataset_with_value(
+        best_lambda_dataset = generate_data(
             query_loader=pretrain_query_loader,
             corpus_data=corpus_data,
             corpus_embeddings=corpus_embeddings,

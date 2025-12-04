@@ -66,7 +66,7 @@ def _load_hf_data(split: str) -> List[Dict]:
     
     return data
 
-class _MtopQueryDataset(Dataset):
+class MtopQueryDataset(Dataset):
     def __init__(self, data: List[Dict]):
         self.data = data
     def __len__(self) -> int:
@@ -112,7 +112,7 @@ def get_dataloader(
             logger.info(f"Requested nums ({nums}) is larger than dataset size ({len(data)}). Using full dataset.")
         query_data = data
 
-    dataset = _MtopQueryDataset(query_data)
+    dataset = MtopQueryDataset(query_data)
     
     return DataLoader(
         dataset, 

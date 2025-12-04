@@ -225,9 +225,9 @@ def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, 
             logits = agent.actor_head(features)
             values = agent.value_head(features).squeeze(-1)
 
-            log_probs = F.log_softmax(logits, dim=-1)
-            per_sample_actor_loss = -(target_dists * log_probs).sum(dim=-1)
-            
+            bce_loss_fn = torch.nn.BCEWithLogitsLoss(reduction='none')
+            per_sample_bce_loss = bce_loss_fn(logits, target_dists)
+            per_sample_actor_loss = per_sample_bce_loss.mean(dim=-1)
             actor_loss = (per_sample_actor_loss * actor_masks).sum() / (actor_masks.sum() + 1e-8)
             value_loss = mse_loss_fn(values, value_targets)
             loss = actor_loss + 0.5 * value_loss
@@ -268,7 +268,7 @@ def main():
     corpus_data, corpus_embeddings_cpu = dataloader.get_corpus() 
     corpus_embeddings = corpus_embeddings_cpu.to(device)
 
-    dataset_path = f"{config.CACHE_DIR}/pretrain_datasetv2.pt"
+    dataset_path = f"{config.CACHE_DIR}/pretrain_datasetv3.pt"
     if os.path.exists(dataset_path):
         logger.info(f"Loading existing dataset from {dataset_path}...")
         best_lambda_dataset = torch.load(dataset_path,weights_only=False)
@@ -290,12 +290,12 @@ def main():
         torch.save(best_lambda_dataset, dataset_path)
         logger.info(f"Dataset saved to {dataset_path}")
 
-    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR) 
+    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR, weight_decay=1e-4)
     pretrain_agent_with_value(agent, optimizer, best_lambda_dataset)
 
     logger.info("--- Evaluation ---")
     sampler = EpisodeSampler(agent, embedding_model, config.NUM_EXAMPLES)
-    val_loader = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False,seed=None)
+    val_loader = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False, seed=None)
     
     run_evaluation(
         llm_wrapper=llm_wrapper,

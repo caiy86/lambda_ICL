@@ -8,7 +8,7 @@ LOG_DIR = f'logs/{PROJECT_NAME}'
 CACHE_DIR = f"cache/{PROJECT_NAME}"
 # PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1128_1409.pt" 
 # PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/1130_1324_best.pt" 
-PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1203_2103.pt"
+PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1204_1720.pt"
 
 USE_WANDB = True
 WANDB_PROJECT = "lambda-icl-ppo" 
@@ -20,30 +20,31 @@ BATCH_SIZE = 16
 NUM_EXAMPLES = 8
 MAX_GEN_TOKENS = 200
 
-TRAIN_NUMS = 5000
-PRETRAIN_NUMS = 1024
+TRAIN_NUMS = 5120
+PRETRAIN_NUMS = 5120
 PRETRAIN_SEED = 1
 
 
 LLM_MODEL_NAME = 'Qwen/Qwen3-0.6B'
 EMBEDDING_MODEL_NAME = 'all-MiniLM-L6-v2'
 
-AGENT_HIDDEN_DIM = 512
+# AGENT_HIDDEN_DIM = 512
+AGENT_HIDDEN_DIM = 32
 # AGENT_DROPOUT = 0.1
-AGENT_DROPOUT = 0.3
+AGENT_DROPOUT = 0.5
 
 REWARD_GAMMA = 0.99
 REWARD_LAMBDA = 0.95
 
 # METRIC_WEIGHT = 0.5
 # LOSS_WEIGHT = 0.5 
-# SCALE_FACTOR = 0.1
-SCALE_FACTOR = 0.5
+SCALE_FACTOR = 0.1
+# SCALE_FACTOR = 0.5
 MMR_LAMBDA = 0.7
 
 LR = 5e-4
-PRETRAIN_LR = 1e-3
-PRETRAIN_LOSS_THRESHOLD = 1.3
+PRETRAIN_LR = 8e-4
+
 UPDATE_TIMESTEPS = 512
 
 PPO_EPOCHS = 4
@@ -55,7 +56,7 @@ E_BONUS_COEF = 0.04
 
 GRAD_CLIP_NORM = 2
 TOTAL_TRAIN_EPOCHS = 20
-PRETRAIN_MAX_EPOCHS = 100
+PRETRAIN_MAX_EPOCHS = 500
 
 SYSTEM_PROMPT = 'You are an expert assistant for semantic parsing. Given a user utterance, you must convert it into its logical form representation.'
 

@@ -56,7 +56,8 @@ E_BONUS_COEF = 0.04
 
 GRAD_CLIP_NORM = 2
 TOTAL_TRAIN_EPOCHS = 20
-PRETRAIN_MAX_EPOCHS = 500
+PRETRAIN_MAX_EPOCHS = 200
+PRETRAIN_LOSS_THRESHOLD = 0.1
 
 SYSTEM_PROMPT = 'You are an expert assistant for semantic parsing. Given a user utterance, you must convert it into its logical form representation.'
 

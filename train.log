@@ -1,0 +1,77 @@
+2025-12-06 14:27:35 - root - INFO - Logging setup complete. Outputting to console and file: train.log
+2025-12-06 14:27:35 - root - INFO - Starting CSV Inspection. Output: results/analysis/inspection_report.csv
+2025-12-06 14:27:35 - root - INFO - Loading Models...
+2025-12-06 14:27:35 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-12-06 14:27:35 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-12-06 14:27:57 - root - INFO - Logging setup complete. Outputting to console and file: train.log
+2025-12-06 14:27:57 - root - INFO - Starting CSV Inspection. Output: results/analysis/inspection_report.csv
+2025-12-06 14:27:57 - root - INFO - Loading Models...
+2025-12-06 14:27:57 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-12-06 14:27:57 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-12-06 14:28:10 - root - INFO - Logging setup complete. Outputting to console and file: train.log
+2025-12-06 14:28:10 - root - INFO - Starting CSV Inspection. Output: results/analysis/inspection_report.csv
+2025-12-06 14:28:10 - root - INFO - Loading Models...
+2025-12-06 14:28:10 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-12-06 14:28:10 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-12-06 14:28:23 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-12-06 14:28:23 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-12-06 14:28:27 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-12-06 14:28:27 - data_utils.mtop_loader - INFO - --- Creating Corpus (Action Space) ---
+2025-12-06 14:28:27 - data_utils.mtop_loader - INFO - Loading full 'train' split (no global cache used)...
+2025-12-06 14:28:33 - data_utils.mtop_loader - INFO - Loading EmbeddingModel (all-MiniLM-L6-v2) for K-Means/Sampling...
+2025-12-06 14:28:33 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-12-06 14:28:33 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-12-06 14:28:40 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-12-06 14:28:40 - data_utils.mtop_loader - INFO - Pre-computing all training data embeddings...
+2025-12-06 14:28:44 - data_utils.mtop_loader - INFO - Full train data and embeddings loaded (15667 samples).
+2025-12-06 14:28:44 - data_utils.mtop_loader - INFO - Corpus created. Final size: 15667
+2025-12-06 14:28:44 - data_utils.mtop_loader - INFO - Splitting 'train' data: Train=5120, Val=64, Seed=1
+2025-12-06 14:28:49 - data_utils.mtop_loader - INFO - Split result -> Train: 5120, Val: 64
+2025-12-06 14:28:49 - root - INFO - Inspecting 200 samples...
+2025-12-06 14:32:21 - root - INFO - Logging setup complete. Outputting to console and file: train.log
+2025-12-06 14:32:21 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-12-06 14:32:21 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-12-06 14:32:39 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-12-06 14:32:39 - models.llm_wrapper - INFO - Loading LLM environment: Qwen/Qwen3-0.6B...
+2025-12-06 14:32:55 - models.llm_wrapper - INFO - LLM 'Qwen/Qwen3-0.6B' loaded successfully.
+2025-12-06 14:32:55 - data_utils.mtop_loader - INFO - --- Creating Corpus (Action Space) ---
+2025-12-06 14:32:55 - data_utils.mtop_loader - INFO - Loading full 'train' split (no global cache used)...
+2025-12-06 14:33:15 - data_utils.mtop_loader - INFO - Loading EmbeddingModel (all-MiniLM-L6-v2) for K-Means/Sampling...
+2025-12-06 14:33:15 - root - INFO - [EmbeddingModel] Loading embedding model: all-MiniLM-L6-v2...
+2025-12-06 14:33:15 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-12-06 14:33:43 - root - INFO - [EmbeddingModel] Model loaded. Embedding dimension: 384
+2025-12-06 14:33:43 - data_utils.mtop_loader - INFO - Pre-computing all training data embeddings...
+2025-12-06 14:33:47 - data_utils.mtop_loader - INFO - Full train data and embeddings loaded (15667 samples).
+2025-12-06 14:33:47 - data_utils.mtop_loader - INFO - Corpus created. Final size: 15667
+2025-12-06 14:33:47 - data_utils.mtop_loader - INFO - Splitting 'train' data: Train=5120, Val=64, Seed=1
+2025-12-06 14:33:56 - data_utils.mtop_loader - INFO - Split result -> Train: 5120, Val: 64
+2025-12-06 15:02:06 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:04:57 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:07:37 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:11:52 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:12:19 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:14:19 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:20:17 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:20:52 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:28:55 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:29:38 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:29:58 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:32:27 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:33:50 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:34:22 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:35:03 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:35:50 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:37:38 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:38:55 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:40:12 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:40:56 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:43:36 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:44:51 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 15:56:31 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:01:59 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:03:56 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:05:28 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:06:01 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:06:22 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:07:18 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-06 16:16:48 - httpx - INFO - HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"

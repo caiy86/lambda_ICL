@@ -5,215 +5,239 @@ from torch.utils.data import DataLoader, TensorDataset
 import os
 import logging
 from tqdm import tqdm
-from typing import List, Dict, Tuple, Optional
-import pandas as pd 
-import numpy as np
+from typing import List, Dict
 
 from config import train_config as config
 import utils
-import data_utils.mtop_loader as dataloader 
+import data_utils.mtop_loader as dataloader
 from models.embedding_model import EmbeddingModel
 from models.llm_wrapper import LLMWrapper
 from models.policy_network import PolicyNetwork
-from engine.sampler import EpisodeSampler, RolloutBuffer
+from engine.sampler import EpisodeSampler
 from utils import device
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+os.makedirs(config.LOG_DIR, exist_ok=True)
+os.makedirs(config.CACHE_DIR, exist_ok=True)
 logger = logging.getLogger(__name__)
 
 @torch.no_grad()
-def run_evaluation(llm_wrapper: LLMWrapper,
-                   val_loader: DataLoader, 
-                   corpus_data: List[Dict[str, str]],
-                   corpus_embeddings: torch.Tensor,
-                   check_correct_fn: callable,
-                   system_prompt: str,
-                   sampler: EpisodeSampler,
-                   desc: str = "Eval") -> float:
-    
+def run_metric_evaluation(llm_wrapper: LLMWrapper,query_data: DataLoader,  corpus_data: List[Dict],corpus_embeddings: torch.Tensor,check_correct_fn: callable,sampler: EpisodeSampler,desc: str) -> float:
+
     sampler.policy_network.eval()
-    
     total_correct = 0
     total_samples = 0
     
-    for batch in tqdm(val_loader, desc=desc, leave=False):
-        curr_batch_size = len(batch)
-        
+    for batch in tqdm(query_data, desc=desc, leave=False):
+        bsz = len(batch)
+        total_samples += bsz
+
         buffer = sampler.collect_episodes(
-            query_batch=batch,
+            query_batch=[item for item in batch],
             corpus=corpus_data,
             corpus_embeddings=corpus_embeddings
         )
         
         prompts = []
         targets = []
-        for i in range(curr_batch_size):
-            query_data = buffer.queries[i]
-            example_data = buffer.selected_examples_text[i]
-            
-            prompt_str = llm_wrapper.build_chat_prompt(
-                system_prompt=system_prompt,
-                examples=example_data,
-                query=query_data['query'],
+        for i in range(bsz):
+            prompt = llm_wrapper.build_chat_prompt(
+                system_prompt=config.SYSTEM_PROMPT,
+                examples=buffer.selected_examples_text[i],
+                query=batch[i]['query']
             )
-            prompts.append(prompt_str)
-            targets.append(query_data['answer'])
+            prompts.append(prompt)
+            targets.append(batch[i]['answer'])
 
         generated_texts, _ = llm_wrapper.generate_for_evaluation(
             prompts, max_new_tokens=config.MAX_GEN_TOKENS
         )
         
-        for i in range(curr_batch_size):
-            if check_correct_fn(target_answer=targets[i], pred_text=generated_texts[i]):
+        for tgt, pred in zip(targets, generated_texts):
+            if check_correct_fn(tgt, pred):
                 total_correct += 1
-        
-        total_samples += curr_batch_size
-
+                
     accuracy = (total_correct / total_samples) * 100 if total_samples > 0 else 0.0
     return accuracy
 
-@torch.no_grad()
-def generate_data(query_loader: DataLoader,corpus_data: List[Dict[str, str]],corpus_embeddings: torch.Tensor,embedding_model: EmbeddingModel,llm_wrapper: LLMWrapper,check_correct_fn: callable) -> TensorDataset:
-
-    logger.info(f"--- Generating Oracle Dataset (Grid Search & Value Estimation) ---")
+def generate_and_save_cache(
+    fpath, 
+    raw_list, 
+    corpus_data, 
+    corpus_embeddings, 
+    embedding_model, 
+    llm_wrapper, 
+    check_fn
+):
     
+    logger.info(f"Starting Oracle Generation for {len(raw_list)} samples...")
     lambda_candidates = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     candidate_indices = [int(round(x / 0.05)) for x in lambda_candidates]
-    logger.info(f"Searching lambdas: {lambda_candidates} -> Indices: {candidate_indices}")
-
+    
     all_query_embs = []
     all_target_dists = []
     all_value_targets = []
     all_actor_masks = []
-
-    total_solvable = 0
-    total_samples = 0
-
-    for query_batch_list in tqdm(query_loader, desc="Oracle Searching"):
-        batch_size = len(query_batch_list)
-        
-        query_texts = [item['query'] for item in query_batch_list]
+    
+    batch_size = config.BATCH_SIZE
+    batches = [raw_list[i:i + batch_size] for i in range(0, len(raw_list), batch_size)]
+    
+    solvable_count = 0
+    
+    for batch in tqdm(batches, desc="Oracle Gen"):
+        curr_bs = len(batch)
+        query_texts = [x['query'] for x in batch]
         query_embs = embedding_model.encode(query_texts)
-        
-        query_indices = [item.get('corpus_index', -1) for item in query_batch_list]
+
+        query_indices = [x.get('corpus_index', -1) for x in batch]
         self_mask_indices = torch.tensor(query_indices, device=utils.device)
-        has_valid_indices = (self_mask_indices >= 0).any()
 
-        correctness_matrix = torch.zeros((batch_size, len(candidate_indices)), dtype=torch.bool, device=utils.device)
-
-        for i, (lam_val, _) in enumerate(zip(lambda_candidates, candidate_indices)):
-            lambda_tensor = torch.full((batch_size, 1), lam_val, device=utils.device)
-            batch_selected_indices = torch.zeros((batch_size, config.NUM_EXAMPLES), dtype=torch.long, device=utils.device)
-            batch_selected_embs = torch.zeros((batch_size, config.NUM_EXAMPLES, embedding_model.dim), device=utils.device)
-            sim_scores = torch.matmul(query_embs, corpus_embeddings.T)
-            relevance_scores = sim_scores
-            selected_mask = torch.zeros_like(sim_scores, dtype=torch.bool)
-            
-            if has_valid_indices:
-                rows = torch.arange(batch_size, device=utils.device)
+        correct_mat = torch.zeros((curr_bs, len(lambda_candidates)), dtype=torch.bool, device=utils.device)
+        sim_scores_base = torch.matmul(query_embs, corpus_embeddings.T)
+        
+        for i_lam, lam_val in enumerate(lambda_candidates):
+            lam_tensor = torch.full((curr_bs, 1), lam_val, device=utils.device)
+         
+            sel_mask = torch.zeros_like(sim_scores_base, dtype=torch.bool)
+            if (self_mask_indices >= 0).any():
+                rows = torch.arange(curr_bs, device=utils.device)
                 valid = self_mask_indices >= 0
-                if valid.any():
-                    selected_mask[rows[valid], self_mask_indices[valid]] = True
-
+                sel_mask[rows[valid], self_mask_indices[valid]] = True
+                
+            sel_embs = torch.zeros((curr_bs, config.NUM_EXAMPLES, embedding_model.dim), device=utils.device)
+            sel_idxs = torch.zeros((curr_bs, config.NUM_EXAMPLES), dtype=torch.long, device=utils.device)
+            
             for t in range(config.NUM_EXAMPLES):
                 if t == 0:
-                    step_scores = relevance_scores
+                    step_scr = sim_scores_base.clone()
                 else:
-                    selected_embs_so_far = batch_selected_embs[:, :t, :]
-                    sim_to_selected = torch.matmul(selected_embs_so_far, corpus_embeddings.T)
-                    diversity_penalty, _ = torch.max(sim_to_selected, dim=1)
-                    step_scores = (lambda_tensor * relevance_scores) - ((1 - lambda_tensor) * diversity_penalty)
+                    div_pen, _ = torch.max(torch.matmul(sel_embs[:, :t, :], corpus_embeddings.T), dim=1)
+                    step_scr = (lam_tensor * sim_scores_base) - ((1 - lam_tensor) * div_pen)
                 
-                step_scores.masked_fill_(selected_mask, -torch.inf)
-                current_action = torch.argmax(step_scores, dim=1)
-                
-                batch_selected_indices[:, t] = current_action
-                batch_selected_embs[:, t, :] = corpus_embeddings[current_action]
-                selected_mask.scatter_(dim=1, index=current_action.unsqueeze(1), value=True)
+                step_scr.masked_fill_(sel_mask, -1e9)
+                act = torch.argmax(step_scr, dim=1)
+                sel_idxs[:, t] = act
+                sel_embs[:, t, :] = corpus_embeddings[act]
+                sel_mask.scatter_(1, act.unsqueeze(1), True)
             
             prompts = []
             targets = []
-            for b in range(batch_size):
-                selected_indices = batch_selected_indices[b].cpu().tolist()
-                example_data = [corpus_data[idx] for idx in selected_indices]
-                prompt_str = llm_wrapper.build_chat_prompt(
-                    system_prompt=config.SYSTEM_PROMPT,
-                    examples=example_data,
-                    query=query_batch_list[b]['query']
-                )
-                prompts.append(prompt_str)
-                targets.append(query_batch_list[b]['answer'])
+            sel_idxs_list = sel_idxs.cpu().tolist()
+            for b_idx in range(curr_bs):
+                exs = [corpus_data[idx] for idx in sel_idxs_list[b_idx]]
+                p = llm_wrapper.build_chat_prompt(config.SYSTEM_PROMPT, exs, batch[b_idx]['query'])
+                prompts.append(p)
+                targets.append(batch[b_idx]['answer'])
             
-            generated_texts, _ = llm_wrapper.generate_for_evaluation(
-                prompts, max_new_tokens=config.MAX_GEN_TOKENS
-            )
+            # LLM Gen
+            preds, _ = llm_wrapper.generate_for_evaluation(prompts, max_new_tokens=config.MAX_GEN_TOKENS)
             
-            for b in range(batch_size):
-                if check_correct_fn(target_answer=targets[b], pred_text=generated_texts[b]):
-                    correctness_matrix[b, i] = True
+            for b_idx in range(curr_bs):
+                if check_fn(targets[b_idx], preds[b_idx]):
+                    correct_mat[b_idx, i_lam] = True
 
-        batch_target_dists = torch.zeros((batch_size, 21), device=utils.device)
-        batch_value_targets = torch.full((batch_size,), -1.0, device=utils.device)
-        batch_actor_masks = torch.zeros((batch_size,), device=utils.device)
-
-        for b in range(batch_size):
-            valid_indices_mask = correctness_matrix[b]
-            if valid_indices_mask.any():
-                total_solvable += 1
-                batch_value_targets[b] = 1.0
-                batch_actor_masks[b] = 1.0
-                valid_indices = torch.tensor(candidate_indices, device=utils.device)[valid_indices_mask]
-                prob = 1.0 / len(valid_indices)
-                batch_target_dists[b].index_fill_(0, valid_indices, prob)
-            else:
-                pass
-
+        batch_dists = torch.zeros((curr_bs, 21), device=utils.device) 
+        batch_vals = torch.full((curr_bs,), -1.0, device=utils.device)
+        batch_masks = torch.zeros((curr_bs,), device=utils.device)
+        
+        for b_idx in range(curr_bs):
+            valid = correct_mat[b_idx]
+            if valid.any():
+                solvable_count += 1
+                batch_vals[b_idx] = 1.0
+                batch_masks[b_idx] = 1.0
+                valid_act_indices = torch.tensor(candidate_indices, device=utils.device)[valid]
+                batch_dists[b_idx].index_fill_(0, valid_act_indices, 1.0)
+        
         all_query_embs.append(query_embs.cpu())
-        all_target_dists.append(batch_target_dists.cpu())
-        all_value_targets.append(batch_value_targets.cpu())
-        all_actor_masks.append(batch_actor_masks.cpu())
-        
-        total_samples += batch_size
+        all_target_dists.append(batch_dists.cpu())
+        all_value_targets.append(batch_vals.cpu())
+        all_actor_masks.append(batch_masks.cpu())
 
-    all_query_embs = torch.cat(all_query_embs, dim=0)
-    all_target_dists = torch.cat(all_target_dists, dim=0)
-    all_value_targets = torch.cat(all_value_targets, dim=0)
-    all_actor_masks = torch.cat(all_actor_masks, dim=0)
+    logger.info(f"Oracle Solvability: {solvable_count}/{len(raw_list)} ({solvable_count/len(raw_list):.2%})")
     
-    solvable_rate = (total_solvable / total_samples) * 100 if total_samples > 0 else 0
-    logger.info(f"Oracle Dataset Generated. Samples: {total_samples}, Solvable: {total_solvable} ({solvable_rate:.2f}%)")
-    
-    return TensorDataset(all_query_embs, all_target_dists, all_value_targets, all_actor_masks)
-    
-def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, pretrain_dataset: TensorDataset):
-    logger.info(f"--- Starting Supervised Pre-training (Actor + Value) ---")
+    ds = TensorDataset(
+        torch.cat(all_query_embs),
+        torch.cat(all_target_dists),
+        torch.cat(all_value_targets),
+        torch.cat(all_actor_masks)
+    )
+    torch.save(ds, fpath)
+    return ds
 
-    pretrain_loader = DataLoader(pretrain_dataset, batch_size=64, shuffle=True)
+def main():
+    utils.setup_logging(log_level="INFO", log_file=os.path.join(config.LOG_DIR, f"pretrain_{config.RUN_NAME}.log"))
+    logger.info(f"Run Name: {config.RUN_NAME}")
     
-    mse_loss_fn = torch.nn.MSELoss()
+    embedding_model = EmbeddingModel(config.EMBEDDING_MODEL_NAME)
+    llm_wrapper = LLMWrapper(config.LLM_MODEL_NAME)
+    agent = PolicyNetwork(embedding_model.dim, config.AGENT_HIDDEN_DIM, config.AGENT_DROPOUT).to(device)
+    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR)
     
+    corpus_data, corpus_embeddings_cpu = dataloader.get_corpus()
+    corpus_embeddings = corpus_embeddings_cpu.to(device)
+    
+    val_size = 64 
+    train_size = config.PRETRAIN_NUMS 
+    
+    train_raw, val_raw = dataloader.get_train_val_split_data(
+        split='train',
+        train_nums=train_size,
+        val_nums=val_size,
+        seed=config.PRETRAIN_SEED
+    )
+    
+    cache_file = f"{config.CACHE_DIR}/train_oracle_{train_size}_{config.PRETRAIN_SEED}.pt"
+    if os.path.exists(cache_file):
+        logger.info(f"Loading Oracle Cache: {cache_file}")
+        train_ds = torch.load(cache_file, weights_only=False)
+    else:
+        logger.info("Cache miss. Generating Oracle...")
+        train_ds = generate_and_save_cache(
+            cache_file, train_raw, corpus_data, corpus_embeddings, 
+            embedding_model, llm_wrapper, dataloader.check_correct
+        )
+    
+    train_loader = DataLoader(train_ds, batch_size=config.BATCH_SIZE, shuffle=True)
+    val_seen_ds = DataLoader(
+        dataloader.MtopQueryDataset(train_raw[:config.BATCH_SIZE * 4]),
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        collate_fn=dataloader.list_dict_collate_fn
+    )
+    val_ds = DataLoader(
+        dataloader.MtopQueryDataset(val_raw),
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        collate_fn=dataloader.list_dict_collate_fn
+    )
+    test_ds = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False)
+
+
+    sampler = EpisodeSampler(agent, embedding_model, config.NUM_EXAMPLES)
+
+    logger.info("--- Starting Training ---")
+    bce_loss = torch.nn.BCEWithLogitsLoss(reduction='none')
+    # mse_loss = torch.nn.MSELoss()
+
+
     for epoch in range(1, config.PRETRAIN_MAX_EPOCHS + 1):
-        agent.train() 
+        agent.train()
         total_loss = 0.0
-        total_actor_loss = 0.0
-        total_value_loss = 0.0
         
-        for query_embs, target_dists, value_targets, actor_masks in pretrain_loader:
-            query_embs = query_embs.to(device)
-            target_dists = target_dists.to(device)
-            value_targets = value_targets.to(device)
-            actor_masks = actor_masks.to(device)
-
-            features = agent.feature_net(query_embs)
+        for q_emb, t_dist, v_tgt, mask in train_loader:
+            q_emb, t_dist, v_tgt, mask = q_emb.to(device), t_dist.to(device), v_tgt.to(device), mask.to(device)
+            
+            features = agent.feature_net(q_emb)
             logits = agent.actor_head(features)
             # values = agent.value_head(features).squeeze(-1)
-
-            bce_loss_fn = torch.nn.BCEWithLogitsLoss(reduction='none')
-            per_sample_bce_loss = bce_loss_fn(logits, target_dists)
-            per_sample_actor_loss = per_sample_bce_loss.mean(dim=-1)
-            actor_loss = (per_sample_actor_loss * actor_masks).sum() / (actor_masks.sum() + 1e-8)
-            # value_loss = mse_loss_fn(values, value_targets)
-            loss = actor_loss
-
+            
+            act_loss = (bce_loss(logits, t_dist).mean(dim=1) * mask).sum() / (mask.sum() + 1e-8)
+            
+            # val_loss = mse_loss(values, v_tgt)
+            
+            loss = act_loss
+            
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(agent.parameters(), config.GRAD_CLIP_NORM)
@@ -221,77 +245,44 @@ def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, 
             
             total_loss += loss.item()
             
-        avg_loss = total_loss / len(pretrain_loader)
+        avg_loss = total_loss / len(train_loader)
+        logger.info(f"Epoch {epoch} | Loss: {avg_loss:.4f}")
         
-        logger.info(f"Epoch {epoch}: Average Loss={avg_loss:.4f} ")
-
-def main():
-
-    os.makedirs(config.LOG_DIR, exist_ok=True)
-    os.makedirs(config.CACHE_DIR, exist_ok=True)
-
-    utils.setup_logging(log_level="INFO", log_file=os.path.join(config.LOG_DIR, f"pretrain_{config.RUN_NAME}.log"))
-    # utils.initialize_seeds(config.SEED)
-    logger.info(f"Using device: {device}")
-
-    embedding_model = EmbeddingModel(model_name=config.EMBEDDING_MODEL_NAME)
-    llm_wrapper = LLMWrapper(model_name=config.LLM_MODEL_NAME)
-    
-    agent = PolicyNetwork(
-        embedding_dim=embedding_model.dim,
-        hidden_dim=config.AGENT_HIDDEN_DIM,
-        dropout=config.AGENT_DROPOUT
-    ).to(device)
-    
-    corpus_data, corpus_embeddings_cpu = dataloader.get_corpus() 
-    corpus_embeddings = corpus_embeddings_cpu.to(device)
-
-    dataset_path = f"{config.CACHE_DIR}/pretrain_dataset.pt"
-    if os.path.exists(dataset_path):
-        logger.info(f"Loading existing dataset from {dataset_path}...")
-        best_lambda_dataset = torch.load(dataset_path,weights_only=False)
-    else:
-        logger.info("Dataset not found. Generating new dataset...")
-
-        pretrain_query_loader = dataloader.get_dataloader(
-            split='train',batch_size=config.BATCH_SIZE, shuffle=True, nums=config.PRETRAIN_NUMS,seed=config.PRETRAIN_SEED 
-        )
+        if avg_loss < config.PRETRAIN_LOSS_THRESHOLD:
+            logger.info(f"Training stopped at epoch {epoch} as loss {avg_loss:.4f} < threshold {config.PRETRAIN_LOSS_THRESHOLD:.4f}")
+            break
         
-        best_lambda_dataset = generate_data(
-            query_loader=pretrain_query_loader,
-            corpus_data=corpus_data,
-            corpus_embeddings=corpus_embeddings,
-            embedding_model=embedding_model,
-            llm_wrapper=llm_wrapper,
-            check_correct_fn=dataloader.check_correct 
-        )
-        torch.save(best_lambda_dataset, dataset_path)
-        logger.info(f"Dataset saved to {dataset_path}")
+        if epoch % 20 == 0:
+            logger.info(f"--- Eval @ Epoch {epoch} ---")
+            
+            train_acc = run_metric_evaluation(
+                llm_wrapper, val_seen_ds, corpus_data, corpus_embeddings,
+                dataloader.check_correct, sampler, "Eval Train Sub"
+            )
 
-    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR, weight_decay=1e-4)
-    pretrain_agent_with_value(agent, optimizer, best_lambda_dataset)
+            val_acc = run_metric_evaluation(
+                llm_wrapper, val_ds, corpus_data, corpus_embeddings,
+                dataloader.check_correct, sampler, "Eval Val"
+            )
+            
+            logger.info(f"Epoch {epoch} Result | Train(sub) Acc: {train_acc:.2f}% | Val Acc: {val_acc:.2f}%")
+            
+            # 保存val acc最好的模型
+            if not hasattr(main, 'best_val_acc'):
+                main.best_val_acc = 0.0
+                main.best_epoch = 0
+            if val_acc > main.best_val_acc:
+                main.best_val_acc = val_acc
+                main.best_epoch = epoch
+                logger.info(f"New best Val Acc: {val_acc:.2f}% at epoch {epoch}, saving checkpoint.")
+                torch.save(agent.state_dict(), f"{config.CACHE_DIR}/pre_mdl_{config.RUN_NAME}_val_best.pt")
 
-    logger.info("--- Evaluation ---")
-    sampler = EpisodeSampler(agent, embedding_model, config.NUM_EXAMPLES)
-    val_loader = dataloader.get_dataloader(split='dev', batch_size=config.BATCH_SIZE, shuffle=False, seed=None)
-    
-    run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,      
-        corpus_data=corpus_data,       
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        mode='policy', 
-        sampler=sampler
+    logger.info("--- Final Test on Dev Set ---")
+    test_acc = run_metric_evaluation(
+        llm_wrapper, test_ds, corpus_data, corpus_embeddings,
+        dataloader.check_correct, sampler, "Eval Dev"
     )
-
-    torch.save(agent.state_dict(), f"{config.CACHE_DIR}/pre_mdl_{config.RUN_NAME}.pt")
-    logger.info(f"Pre-trained model saved to: {config.CACHE_DIR}/pre_mdl_{config.RUN_NAME}.pt")
+    logger.info(f"Final Dev Accuracy: {test_acc:.2f}%")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logger.error("Error", exc_info=True)
-        raise e
+    main()

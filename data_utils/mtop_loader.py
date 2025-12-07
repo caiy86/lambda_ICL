@@ -35,7 +35,7 @@ def _get_full_train_data_and_embeddings() -> Tuple[List[Dict], torch.Tensor]:
 
     return full_train_data, full_train_embeddings
 
-def _list_dict_collate_fn(batch: List[Dict]) -> List[Dict]:
+def list_dict_collate_fn(batch: List[Dict]) -> List[Dict]:
 
     return batch
 
@@ -120,8 +120,38 @@ def get_dataloader(
         shuffle=shuffle,
         num_workers=0, 
         pin_memory=False,
-        collate_fn=_list_dict_collate_fn
+        collate_fn=list_dict_collate_fn
     )
+
+def get_train_val_split_data(
+    split: str,
+    train_nums: int,
+    val_nums: int,
+    seed: int = 42
+) -> Tuple[List[Dict], List[Dict]]:
+
+    logger.info(f"Splitting '{split}' data: Train={train_nums}, Val={val_nums}, Seed={seed}")
+    
+    all_data = _load_hf_data(split=split)
+    total_needed = train_nums + val_nums
+    
+    if len(all_data) < total_needed:
+        logger.warning(f"Requested {total_needed} samples but only {len(all_data)} available. Using full dataset.")
+
+    rng = random.Random(seed)
+    rng.shuffle(all_data)
+    
+    train_data = all_data[:train_nums]
+    val_data = all_data[train_nums : train_nums + val_nums]
+    
+    logger.info(f"Split result -> Train: {len(train_data)}, Val: {len(val_data)}")
+    
+    train_indices = set(item.get('corpus_index') for item in train_data)
+    val_indices = set(item.get('corpus_index') for item in val_data)
+    intersection = train_indices.intersection(val_indices)
+    assert len(intersection) == 0, f"Error: Train and Val sets overlap! ({len(intersection)} samples)"
+    
+    return train_data, val_data
 
 def _split_children(content: str) -> List[str]:
 

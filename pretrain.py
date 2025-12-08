@@ -92,8 +92,8 @@ def generate_data(query_loader: DataLoader,
     all_actor_masks = []  
 
     total_samples = 0
-
-    TEMPERATURE = 0.1
+    avg_max_prob = 0
+    TEMPERATURE = 0.01
 
     for query_batch_list in tqdm(query_loader, desc="Oracle Searching"):
         batch_size = len(query_batch_list)
@@ -161,7 +161,10 @@ def generate_data(query_loader: DataLoader,
 
         neg_loss = -batch_loss_matrix
         target_dists = F.softmax(neg_loss / TEMPERATURE, dim=1) # (B, 21)
-        
+
+        curr_max_prob = target_dists.max(dim=1)[0].mean().item()
+        avg_max_prob = (avg_max_prob * total_samples + curr_max_prob * batch_size) / (total_samples + batch_size)
+
         min_losses, _ = batch_loss_matrix.min(dim=1)
         probs = torch.exp(-min_losses)
         batch_value_targets = 2.0 * probs - 1.0
@@ -175,6 +178,10 @@ def generate_data(query_loader: DataLoader,
         
         total_samples += batch_size
 
+    logger.info(f"Oracle Generated. Avg Max Prob: {avg_max_prob:.4f} (Should be > 0.5)")
+    if avg_max_prob < 0.2:
+        logger.warning("Warning: Oracle labels are too flat! Consider lowering TEMPERATURE further.")
+        
     dataset = TensorDataset(
         torch.cat(all_query_embs, dim=0),
         torch.cat(all_target_dists, dim=0),
@@ -194,9 +201,7 @@ def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, 
     
     for epoch in range(1, config.PRETRAIN_MAX_EPOCHS + 1):
         agent.train() 
-        total_loss = 0.0
-        total_actor_loss = 0.0
-        total_value_loss = 0.0
+        stats = {"loss": 0.0, "actor": 0.0, "value": 0.0, "ent_target": 0.0, "ent_pred": 0.0}
         
         for query_embs, target_dists, value_targets, actor_masks in pretrain_loader:
             query_embs = query_embs.to(device)
@@ -219,17 +224,23 @@ def pretrain_agent_with_value(agent: PolicyNetwork, optimizer: optim.Optimizer, 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(agent.parameters(), config.GRAD_CLIP_NORM)
             optimizer.step()
-            
-            total_loss += loss.item()
-            total_actor_loss += actor_loss.item()
-            total_value_loss += value_loss.item()
-            
-        avg_loss = total_loss / len(pretrain_loader)
-        avg_act = total_actor_loss / len(pretrain_loader)
-        avg_val = total_value_loss / len(pretrain_loader)
+            with torch.no_grad():
+                ent_target = -(target_dists * torch.log(target_dists + 1e-9)).sum(dim=-1).mean()
+                probs = F.softmax(actor_logits, dim=-1)
+                ent_pred = -(probs * torch.log(probs + 1e-9)).sum(dim=-1).mean()
 
+            stats["loss"] += loss.item()
+            stats["actor"] += actor_loss.item()
+            stats["value"] += value_loss.item()
+            stats["ent_target"] += ent_target.item()
+            stats["ent_pred"] += ent_pred.item()
+            
+        for k in stats: stats[k] /= len(pretrain_loader)
+        
         if epoch % 5 == 0 or epoch == 1:
-            logger.info(f"Epoch {epoch}: Total={avg_loss:.4f} | Actor={avg_act:.4f} | Value={avg_val:.4f}")
+            logger.info(f"Epoch {epoch}: Total={stats['loss']:.4f} | Actor={stats['actor']:.4f} | Value={stats['value']:.4f}")
+            # 如果 Ent_Pred 远大于 Ent_Target，说明模型欠拟合
+            logger.info(f"    Entropy: Target={stats['ent_target']:.4f} vs Pred={stats['ent_pred']:.4f}")
 
 def main():
 
@@ -251,7 +262,7 @@ def main():
     corpus_data, corpus_embeddings_cpu = dataloader.get_corpus() 
     corpus_embeddings = corpus_embeddings_cpu.to(device)
 
-    dataset_path = f"{config.CACHE_DIR}/pretrain_dataset_v2.pt"
+    dataset_path = f"{config.CACHE_DIR}/pretrain_dataset_v4.pt"
     if os.path.exists(dataset_path):
         logger.info(f"Loading existing dataset from {dataset_path}...")
         best_lambda_dataset = torch.load(dataset_path, weights_only=False)
@@ -296,6 +307,9 @@ def main():
     )
 
     logger.info(f"Validation accuracy: {accuracy:.2f}%")
+
+    torch.save(agent.state_dict(), f"{config.CACHE_DIR}/pre_mdl_RBF_{config.RUN_NAME}.pt")
+    logger.info(f"Policy saved to pre_train_RBF.pt")
 
 if __name__ == "__main__":
     try:

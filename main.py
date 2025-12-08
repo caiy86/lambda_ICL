@@ -228,15 +228,12 @@ def train():
     logger.info("--- Initializing Models ---")
     embedding_model = EmbeddingModel(model_name=config.EMBEDDING_MODEL_NAME)
     llm_wrapper = LLMWrapper(model_name=config.LLM_MODEL_NAME)
-    agent = PolicyNetwork(
+    from models.policy_network import RBFPolicyNetwork
+    agent = RBFPolicyNetwork(
         embedding_dim=embedding_model.dim,
-        hidden_dim=config.AGENT_HIDDEN_DIM,
-        dropout=config.AGENT_DROPOUT 
     ).to(device)
 
-    # --- Optimizer & Scheduler ---
     optimizer = optim.AdamW(agent.parameters(), lr=config.LR)
-    # 你的线性调度器
     scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=config.TOTAL_TRAIN_EPOCHS)
 
     if config.PRETRAINED_PATH and os.path.exists(config.PRETRAINED_PATH):
@@ -255,9 +252,14 @@ def train():
     sampler = EpisodeSampler(policy_network=agent, embedding_model=embedding_model, num_examples=config.NUM_EXAMPLES)
     reward_computer = RewardComputer(gamma=config.REWARD_GAMMA, lambda_=config.REWARD_LAMBDA, system_prompt=config.SYSTEM_PROMPT)
     ppo_trainer = PPOTrainer(
-        agent=agent, optimizer=optimizer, ppo_epochs=config.PPO_EPOCHS,
-        ppo_clip_eps=config.PPO_CLIP_EPS, value_loss_coef=config.V_LOSS_COEF,
-        entropy_bonus_coef=config.E_BONUS_COEF, grad_clip_norm=config.GRAD_CLIP_NORM
+        agent=agent, 
+        optimizer=optimizer, 
+        ppo_epochs=config.PPO_EPOCHS,
+        ppo_clip_eps=config.PPO_CLIP_EPS, 
+        value_loss_coef=config.V_LOSS_COEF,
+        entropy_bonus_coef=config.E_BONUS_COEF, 
+        grad_clip_norm=config.GRAD_CLIP_NORM,
+        mini_batch_size=config.PPO_MINIBATCH_SIZE
     )
 
     # --- Pretraining Evaluation with MMR Baseline ---
@@ -338,11 +340,13 @@ def train():
 
                 if config.USE_WANDB:
                     wandb.log({
-                        "train/step_actor_loss": log_dict.get("actor_loss", 0),
-                        "train/step_value_loss": log_dict.get("value_loss", 0),
-                        "train/step_reward": avg_reward,
-                        "train/step_kl": log_dict.get("approx_kl", 0),
-                        "train/lr": optimizer.param_groups[0]['lr'],
+                        "train/reward": avg_reward,
+                        "train/actor_loss": log_dict["actor_loss"],
+                        "train/value_loss": log_dict["value_loss"],
+                        "train/entropy": log_dict["entropy_loss"], # 关注 Entropy 是否骤降
+                        "train/kl": log_dict["approx_kl"],         # 关注 KL 是否过大 (>0.05 说明更新太激进)
+                        "train/clip_frac": log_dict["clip_frac"],  # 关注 Clip 比例 (理想 0.0~0.2)
+                        "train/explained_var": log_dict["explained_var"], # 关注 Critic 质量
                         "global_step": total_batches
                     })
 

@@ -1,4 +1,3 @@
-from config.test_config import MMR_LAMBDA
 from utils import get_run_name
 
 PROJECT_NAME = 'lambda_icl_qwen_0.6b'
@@ -6,59 +5,53 @@ RUN_NAME = get_run_name(PROJECT_NAME)
 
 LOG_DIR = f'logs/{PROJECT_NAME}'
 CACHE_DIR = f"cache/{PROJECT_NAME}"
-# PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1128_1409.pt" 
-# PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/1130_1324_best.pt" 
-PRETRAINED_PATH = "cache/lambda_icl_qwen_0.6b/pre_mdl_1204_1720.pt"
+PRETRAINED_PATH = f"{CACHE_DIR}/pre_mdl_RBF_1208_1648.pt"
 
 USE_WANDB = True
-WANDB_PROJECT = "lambda-icl-ppo" 
+WANDB_PROJECT = "lambda-icl-ppo"
 WANDB_ENTITY = None
 
 SEED = 42
 DATASET_NAME = 'mtop'
-BATCH_SIZE = 16
+
+# --- 训练参数 ---
+BATCH_SIZE = 16          # 采集数据的 Batch Size
 NUM_EXAMPLES = 8
 MAX_GEN_TOKENS = 200
 
 TRAIN_NUMS = 5120
-PRETRAIN_NUMS = 1024
+PRETRAIN_NUMS = 5120
 PRETRAIN_SEED = 1
-
 
 LLM_MODEL_NAME = 'Qwen/Qwen3-0.6B'
 EMBEDDING_MODEL_NAME = 'all-MiniLM-L6-v2'
 
-# AGENT_HIDDEN_DIM = 512
-AGENT_HIDDEN_DIM = 128
+# --- Agent 结构 ---
+AGENT_HIDDEN_DIM = 64    # 使用 Lightweight ResNet
 AGENT_DROPOUT = 0.1
-# AGENT_DROPOUT = 0.5
 
+# --- PPO 核心参数 (解决高方差) ---
+LR = 1e-5                # PPO 学习率 (稍微调低一点更稳)
+PRETRAIN_LR = 5e-3       # 预训练学习率
+
+# [关键修改] 增大采样步数：采集更多样本再更新，降低方差
+UPDATE_TIMESTEPS = 2048  # 原 512 -> 现 2048 (约 1/2 epoch)
+
+PPO_EPOCHS = 4           # 每次更新复用数据的次数
+PPO_CLIP_EPS = 0.2
+GRAD_CLIP_NORM = 0.5     # 梯度裁剪更严格一点 (2.0 -> 1.0)
+PPO_MINIBATCH_SIZE = 64
+
+# --- 奖励函数 (Loss + Metric) ---
 REWARD_GAMMA = 0.99
 REWARD_LAMBDA = 0.95
-
-METRIC_WEIGHT = 0.5
-LOSS_WEIGHT = 0.5 
-# SCALE_FACTOR = 0.1
-# SCALE_FACTOR = 0.5
-MMR_LAMBDA = 0.7
-
-LR = 5e-4
-PRETRAIN_LR = 1e-3
-
-UPDATE_TIMESTEPS = 512
-
-PPO_EPOCHS = 4
-PPO_CLIP_EPS = 0.2
+METRIC_WEIGHT = 1.0      # 核心指标权重
+LOSS_WEIGHT = 0.2        # 辅助 Loss 权重
 
 V_LOSS_COEF = 0.5
-# E_BONUS_COEF = 0.01
-E_BONUS_COEF = 0.04
+E_BONUS_COEF = 0.01      # 如果后期熵降得太快，可以适当调大到 0.02-0.05
 
-GRAD_CLIP_NORM = 2
 TOTAL_TRAIN_EPOCHS = 20
-PRETRAIN_MAX_EPOCHS = 200
-PRETRAIN_LOSS_THRESHOLD = 0.1
+PRETRAIN_MAX_EPOCHS = 200 # 预训练轮数 (通常50轮足够收敛)
 
 SYSTEM_PROMPT = 'You are an expert assistant for semantic parsing. Given a user utterance, you must convert it into its logical form representation.'
-
-

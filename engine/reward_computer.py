@@ -91,8 +91,8 @@ class RewardComputer:
                 prob_val = torch.exp(torch.tensor(-nll_val)).item()
                 r_loss = 2.0 * prob_val - 1.0
 
-                # total_r = config.METRIC_WEIGHT * r_metric +  config.LOSS_WEIGHT * r_loss
-                total_r = r_metric * (1.0 + config.SCALE_FACTOR * r_loss)
+                total_r = config.METRIC_WEIGHT * r_metric +  config.LOSS_WEIGHT * r_loss
+                # total_r = r_metric * (1.0 + config.SCALE_FACTOR * r_loss)
                 rewards.append(total_r)
       
             buffer.final_llm_loss = target_losses.to(self.device)

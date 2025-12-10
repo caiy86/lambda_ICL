@@ -1,4 +1,5 @@
 import torch
+from torch.nn import Dropout
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
@@ -8,6 +9,7 @@ from tqdm import tqdm
 from typing import List, Dict, Tuple, Optional
 import pandas as pd 
 import numpy as np
+from sklearn.cluster import MiniBatchKMeans
 
 from config import train_config as config
 import utils
@@ -20,6 +22,7 @@ from utils import device
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 logger = logging.getLogger(__name__)
+
 
 @torch.no_grad()
 def run_evaluation(llm_wrapper: LLMWrapper,
@@ -93,7 +96,7 @@ def generate_data(query_loader: DataLoader,
 
     total_samples = 0
     avg_max_prob = 0
-    TEMPERATURE = 0.01
+    TEMPERATURE = 0.5
 
     for query_batch_list in tqdm(query_loader, desc="Oracle Searching"):
         batch_size = len(query_batch_list)
@@ -253,16 +256,36 @@ def main():
 
     embedding_model = EmbeddingModel(model_name=config.EMBEDDING_MODEL_NAME)
     llm_wrapper = LLMWrapper(model_name=config.LLM_MODEL_NAME)
+    
+    corpus_data, corpus_embeddings = dataloader.get_corpus() 
+    corpus_embeddings_cpu = corpus_embeddings.cpu()
+    
+    logger.info("--- Initializing RBF Centers with K-Means on Corpus ---")
+    logger.info(f"Corpus shape for K-Means: {corpus_embeddings_cpu.shape}")
+
+    RBF_NUM_CENTERS = 1024 
+    
+    kmeans = MiniBatchKMeans(
+        n_clusters=RBF_NUM_CENTERS, 
+        batch_size=1024, 
+        random_state=config.SEED,
+        n_init='auto'
+    )
+    kmeans.fit(corpus_embeddings_cpu)
+    
+    cluster_centers = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
+    logger.info(f"K-Means converged. Centers shape: {cluster_centers.shape}")
 
     from models.policy_network import RBFPolicyNetwork
     agent = RBFPolicyNetwork(
         embedding_dim=embedding_model.dim,
+        num_centers=RBF_NUM_CENTERS,
+        dropout = config.AGENT_DROPOUT
     ).to(device)
-    
-    corpus_data, corpus_embeddings_cpu = dataloader.get_corpus() 
-    corpus_embeddings = corpus_embeddings_cpu.to(device)
-
-    dataset_path = f"{config.CACHE_DIR}/pretrain_dataset_v4.pt"
+    agent.centers.data = cluster_centers.to(device)
+    logger.info("RBFPolicyNetwork initialized with K-Means centers from Corpus.")
+        
+    dataset_path = f"{config.CACHE_DIR}/pretrain_dataset_{config.TEMPERATURE}.pt"
     if os.path.exists(dataset_path):
         logger.info(f"Loading existing dataset from {dataset_path}...")
         best_lambda_dataset = torch.load(dataset_path, weights_only=False)
@@ -288,7 +311,7 @@ def main():
         torch.save(best_lambda_dataset, dataset_path)
         logger.info(f"Dataset saved to {dataset_path}")
 
-    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR, weight_decay=1e-4)
+    optimizer = optim.AdamW(agent.parameters(), lr=config.PRETRAIN_LR)
 
     pretrain_agent_with_value(agent, optimizer, best_lambda_dataset)
 

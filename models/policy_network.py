@@ -20,6 +20,7 @@ class PolicyNetwork(nn.Module):
         统一接口：供预训练使用，直接获取 logits 和 values
         """
         features = self.extract_features(query_embeddings)
+        features = self.dropout(features)
         logits = self.actor_head(features)
         values = self.value_head(features).squeeze(-1)
         return logits, values
@@ -73,7 +74,7 @@ class LinearNetwork(PolicyNetwork):
         return self.feature_net(query_embeddings)
 
 class RBFPolicyNetwork(PolicyNetwork):
-    def __init__(self, embedding_dim: int, num_centers: int = 128, output_dim: int = 21):
+    def __init__(self, embedding_dim: int, num_centers: int = 128, output_dim: int = 21, dropout: float = 0.0):
         super().__init__()
         
         self.embedding_dim = embedding_dim
@@ -85,13 +86,15 @@ class RBFPolicyNetwork(PolicyNetwork):
         self.log_sigmas = nn.Parameter(torch.zeros(num_centers))
         
         # 注意：这里 RBF 网络的 head 输入维度是 num_centers
+        self.dropout = nn.Dropout(dropout)
         self.actor_head = nn.Linear(num_centers, output_dim)
         self.value_head = nn.Linear(num_centers, 1)
         
         self._init_weights()
 
     def _init_weights(self):
-        nn.init.normal_(self.centers, mean=0.0, std=1.0)
+        # nn.init.normal_(self.centers, mean=0.0, std=1.0)
+        nn.init.normal_(self.centers, mean=0.0, std=0.05)
         nn.init.constant_(self.log_sigmas, 0.0)
         nn.init.xavier_uniform_(self.actor_head.weight)
         nn.init.constant_(self.actor_head.bias, 0.0)
@@ -103,7 +106,8 @@ class RBFPolicyNetwork(PolicyNetwork):
         c_norm_sq = self.centers.pow(2).sum(dim=1).unsqueeze(0)  # [1, K]
         dist_sq = x_norm_sq + c_norm_sq - 2 * torch.matmul(x, self.centers.t())
         dist_sq = torch.clamp(dist_sq, min=1e-6)
-        sigmas = torch.exp(self.log_sigmas).unsqueeze(0) # [1, K]
+        clamped_log_sigmas = torch.clamp(self.log_sigmas, min=-1.0)
+        sigmas = torch.exp(clamped_log_sigmas).unsqueeze(0) # [1, K]
         rbf_activations = torch.exp(-dist_sq / (2 * sigmas.pow(2) + 1e-8))
         return rbf_activations
 

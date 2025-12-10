@@ -84,9 +84,13 @@ class RewardComputer:
             )
             
             rewards = []
+            correct_count = 0
+
             for i in range(batch_size):
                 is_correct = check_correct_fn(target_answer=targets[i], pred_text=generated_texts[i])
                 r_metric = 1.0 if is_correct else -1.0
+                if is_correct:      
+                    correct_count += 1
                 nll_val = target_losses[i].item()
                 prob_val = torch.exp(torch.tensor(-nll_val)).item()
                 r_loss = 2.0 * prob_val - 1.0
@@ -94,7 +98,8 @@ class RewardComputer:
                 total_r = config.METRIC_WEIGHT * r_metric +  config.LOSS_WEIGHT * r_loss
                 # total_r = r_metric * (1.0 + config.SCALE_FACTOR * r_loss)
                 rewards.append(total_r)
-      
+                
+            buffer.info = {"correct_count": correct_count, "total_count": batch_size}
             buffer.final_llm_loss = target_losses.to(self.device)
             buffer.rewards[:, 0] = torch.tensor(rewards, device=self.device)
             

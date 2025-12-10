@@ -231,6 +231,8 @@ def train():
     from models.policy_network import RBFPolicyNetwork
     agent = RBFPolicyNetwork(
         embedding_dim=embedding_model.dim,
+        num_centers=1024,
+        dropout=config.AGENT_DROPOUT
     ).to(device)
 
     optimizer = optim.AdamW(agent.parameters(), lr=config.LR)
@@ -295,7 +297,8 @@ def train():
 
         epoch_stats = {
             "actor_loss": 0.0, "value_loss": 0.0, "entropy": 0.0,
-            "approx_kl": 0.0, "reward": 0.0, "llm_loss": 0.0, "count": 0
+            "approx_kl": 0.0, "reward": 0.0, "llm_loss": 0.0, "count": 0,
+            "correct_samples": 0, "total_samples": 0 
         }
 
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1} [Training]")
@@ -316,7 +319,10 @@ def train():
                 llm_wrapper=llm_wrapper,
                 check_correct_fn=dataloader.check_correct,
             )
-            
+            if hasattr(buffer, 'info'):
+                epoch_stats["correct_samples"] += buffer.info["correct_count"]
+                epoch_stats["total_samples"] += buffer.info["total_count"]   
+
             current_buffers.append(buffer)
             current_steps_count += len(buffer.queries) 
             
@@ -357,24 +363,34 @@ def train():
                 run_avg_val = epoch_stats["value_loss"] / epoch_stats["count"]
                 run_avg_rew = epoch_stats["reward"] / epoch_stats["count"]
                 run_avg_kl = epoch_stats["approx_kl"] / epoch_stats["count"]
-                
+
+                run_avg_acc = 0.0
+                if epoch_stats["total_samples"] > 0:
+                    run_avg_acc = (epoch_stats["correct_samples"] / epoch_stats["total_samples"]) * 100    
+
                 pbar.set_postfix({
                     "avg_act": f"{run_avg_actor:.3f}", # 平均 Actor Loss
                     "avg_crt": f"{run_avg_val:.3f}",   # 平均 Critic Loss
                     "avg_rew": f"{run_avg_rew:.3f}",   # 平均 Reward
-                    "avg_kl": f"{run_avg_kl:.4f}"      # 平均 KL
+                    "avg_kl": f"{run_avg_kl:.4f}",      # 平均 KL
+                    "avg_acc": f"{run_avg_acc:.2f}%"
                 })
 
         if epoch_stats["count"] > 0:
             avg_stats = {k: v / epoch_stats["count"] for k, v in epoch_stats.items() if k != "count"}
+            train_acc = 0.0
+            if epoch_stats["total_samples"] > 0:
+                train_acc = (epoch_stats["correct_samples"] / epoch_stats["total_samples"]) * 100
             logger.info(
                 f"Epoch {epoch+1} Summary | "
+                f"Train Acc: {train_acc:.2f}% | " 
                 f"Avg Rew: {avg_stats['reward']:.4f} | "
                 f"Avg KL: {avg_stats['approx_kl']:.4f} | "
                 f"Avg ActLoss: {avg_stats['actor_loss']:.4f}"
             )
             if config.USE_WANDB:
                 wandb.log({
+                    "epoch/train_accuracy": train_acc,
                     "epoch/avg_reward": avg_stats['reward'],
                     "epoch/avg_kl": avg_stats['approx_kl'],
                     "epoch/avg_actor_loss": avg_stats['actor_loss'],
@@ -405,9 +421,46 @@ def train():
     if config.USE_WANDB:
         wandb.finish()
 
+import gc 
+
 if __name__ == "__main__":
-    try:
-        train()
-    except Exception as e:
-        logger.error("An unhandled exception occurred!", exc_info=True)
-        raise e
+    # try:
+    #     train()
+    # except Exception as e:
+    #     logger.error("An unhandled exception occurred!", exc_info=True)
+    #     raise e
+
+    experiments = [
+        {"lr": 1e-4, "E_BONUS_COEF": 0,     "loss_weight": 0.1},
+        {"lr": 2e-4, "E_BONUS_COEF": 0.001, "loss_weight": 0.1},
+        {"lr": 2e-4, "E_BONUS_COEF": 0,     "loss_weight": 0.2},
+        {"lr": 3e-4, "E_BONUS_COEF": 0,     "loss_weight": 0.05},
+    ]
+
+    for i, exp in enumerate(experiments):
+        try:
+            config.LR = exp["lr"]
+            config.E_BONUS_COEF = exp["E_BONUS_COEF"]
+            config.LOSS_WEIGHT = exp["loss_weight"]
+            
+            config.RUN_NAME = utils.get_run_name(config.PROJECT_NAME)
+            
+            print(f"\n{'='*40}")
+            print(f"Experiment {i+1}/{len(experiments)}: {config.RUN_NAME}")
+            print(f"Params: LR={config.LR}, E_BONUS_COEF={config.E_BONUS_COEF}, Loss_W={config.LOSS_WEIGHT}")
+            print(f"{'='*40}\n")
+
+            train()
+
+        except Exception as e:
+            print(f"Experiment {config.RUN_NAME} FAILED!")
+            import traceback
+            traceback.print_exc()
+        
+        finally:
+            print(f"Experiment {config.RUN_NAME} finished. Cleaning up...")
+
+            gc.collect()
+            torch.cuda.empty_cache()
+            
+            print("Cleanup done. Moving to next experiment...\n")

@@ -45,6 +45,12 @@ class PPOTrainer:
         returns = buffer.returns[:, 0].detach()
         advantages = buffer.advantages[:, 0].detach()
 
+        # active_mask = torch.abs(advantages) > config.MASK_THRESHOLD
+        # active_adv = advantages[active_mask]
+        # batch_mean = active_adv.mean()
+        # batch_std = active_adv.std()
+        # advantages[active_mask] = (active_adv - batch_mean) / (batch_std + 1e-8)
+        # advantages[~active_mask] = 0.0
         # [重要] Advantage Normalization (降低方差的关键)
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 

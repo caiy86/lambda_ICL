@@ -16,7 +16,8 @@ DATASET_NAME = 'mtop'
 
 # --- 训练参数 ---
 BATCH_SIZE = 16          # 采集数据的 Batch Size
-NUM_EXAMPLES = 8
+# NUM_EXAMPLES = 8
+NUM_EXAMPLES = 4
 MAX_GEN_TOKENS = 200
 
 TRAIN_NUMS = 5120
@@ -35,8 +36,7 @@ AGENT_DROPOUT = 0.3
 LR = 2e-4              # PPO 学习率 (稍微调低一点更稳)
 PRETRAIN_LR = 5e-3       # 预训练学习率
 
-# [关键修改] 增大采样步数：采集更多样本再更新，降低方差
-UPDATE_TIMESTEPS = 2048  # 原 512 -> 现 2048 (约 1/2 epoch)
+UPDATE_TIMESTEPS = 512  # 2048 --> 512
 
 PPO_EPOCHS = 4           # 每次更新复用数据的次数
 PPO_CLIP_EPS = 0.2
@@ -57,3 +57,5 @@ TOTAL_TRAIN_EPOCHS = 20
 PRETRAIN_MAX_EPOCHS = 500
 
 SYSTEM_PROMPT = 'You are an expert assistant for semantic parsing. Given a user utterance, you must convert it into its logical form representation.'
+
+MASK_THRESHOLD = 0.5

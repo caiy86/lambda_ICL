@@ -265,23 +265,23 @@ def train():
     )
 
     # --- Pretraining Evaluation with MMR Baseline ---
-    logger.info("--- Running Pre-Training Evaluation (MMR Baseline) ---")
-    mmr_val_accuracy = run_evaluation(
-        llm_wrapper=llm_wrapper,
-        val_loader=val_loader,
-        corpus_data=corpus_data,
-        corpus_embeddings=corpus_embeddings,
-        check_correct_fn=dataloader.check_correct,
-        system_prompt=config.SYSTEM_PROMPT,
-        epoch=0,
-        mode='mmr',
-        embedding_model=embedding_model,
-        num_examples=config.NUM_EXAMPLES,
-        mmr_baseline_lambda=getattr(config, "MMR_LAMBDA", 0.7),
-    )   
-    if config.USE_WANDB:
-        wandb.log({"val/mrr_baseline_accuracy": mmr_val_accuracy, "epoch": 0})
-    logger.info(f"MMR Baseline Validation Accuracy: {mmr_val_accuracy:.2f}%")
+    # logger.info("--- Running Pre-Training Evaluation (MMR Baseline) ---")
+    # mmr_val_accuracy = run_evaluation(
+    #     llm_wrapper=llm_wrapper,
+    #     val_loader=val_loader,
+    #     corpus_data=corpus_data,
+    #     corpus_embeddings=corpus_embeddings,
+    #     check_correct_fn=dataloader.check_correct,
+    #     system_prompt=config.SYSTEM_PROMPT,
+    #     epoch=0,
+    #     mode='mmr',
+    #     embedding_model=embedding_model,
+    #     num_examples=config.NUM_EXAMPLES,
+    #     mmr_baseline_lambda=getattr(config, "MMR_LAMBDA", 0.7),
+    # )   
+    # if config.USE_WANDB:
+    #     wandb.log({"val/mrr_baseline_accuracy": mmr_val_accuracy, "epoch": 0})
+    # logger.info(f"MMR Baseline Validation Accuracy: {mmr_val_accuracy:.2f}%")
 
     logger.info("--- Starting Training Loop ---")
     
@@ -424,6 +424,7 @@ def train():
 import gc 
 
 if __name__ == "__main__":
+
     # try:
     #     train()
     # except Exception as e:
